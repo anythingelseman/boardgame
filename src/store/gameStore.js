@@ -153,6 +153,19 @@ const useGameStore = create((set, get) => ({
         }));
     },
 
+    flipTopCard: (leaderId) => {
+        const deck = get()._getDeck(leaderId).sort((a, b) => b.zIndex - a.zIndex);
+        const top = deck[0];
+        if (!top) return;
+        set(state => ({
+            objects: state.objects.map(o =>
+                o.id === top.id
+                    ? { ...o, flipped: !o.flipped, x: o.x + 90, zIndex: ++maxZ, deckId: null }
+                    : o
+            ),
+        }));
+    },
+
     // Stack selected cards into a face-down deck — assigns shared deckId
     createDeck: (ids) => {
         const { objects } = get();

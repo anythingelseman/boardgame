@@ -12,7 +12,7 @@ import PlayerCursor from './PlayerCursor';
 
 export default function GameCanvas({
     transform, handlers, isPanning, isSpaceHeld, screenToWorld, broadcastCursor, onViewImage,
-    placementCard, onPlacementConfirm, onPlacementCancel,
+    placementCard, onPlacementConfirm, onPlacementCancel, onPlayCard,
     sidebarCollapsed, sidebarW,
 }) {
     const { objects, showGrid, deselectAll, selectMany, selectedIds } = useGameStore();
@@ -204,7 +204,7 @@ export default function GameCanvas({
                         style={{
                             width: '100%',
                             height: '100%',
-                            background: placementCard.color || '#fdf6e3',
+                            background: (placementCard.startFlipped ? '#1a2f1a' : (placementCard.color || '#fdf6e3')),
                             borderRadius: 6 * transform.scale,
                             border: `${2 * transform.scale}px solid rgba(250,204,21,0.9)`,
                             boxShadow: `0 0 ${16 * transform.scale}px rgba(250,204,21,0.5), 0 8px 24px rgba(0,0,0,0.5)`,
@@ -216,19 +216,25 @@ export default function GameCanvas({
                             gap: 4,
                         }}
                     >
-                        <span style={{ fontSize: 18 * transform.scale }}>🃏</span>
-                        <span style={{
-                            fontSize: Math.max(9, 9 * transform.scale),
-                            color: '#1a4731',
-                            fontWeight: 700,
-                            maxWidth: '90%',
-                            textAlign: 'center',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                        }}>
-                            {placementCard.label || 'Card'}
-                        </span>
+                        {placementCard.startFlipped ? (
+                            <span style={{ fontSize: 24 * transform.scale }}>🎴</span>
+                        ) : (
+                            <>
+                                <span style={{ fontSize: 18 * transform.scale }}>🃏</span>
+                                <span style={{
+                                    fontSize: Math.max(9, 9 * transform.scale),
+                                    color: '#1a4731',
+                                    fontWeight: 700,
+                                    maxWidth: '90%',
+                                    textAlign: 'center',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                }}>
+                                    {placementCard.label || 'Card'}
+                                </span>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
@@ -237,7 +243,7 @@ export default function GameCanvas({
             {placementCard && (
                 <div className="placement-banner">
                     <span>📍</span>
-                    <span>Click to place <strong>{placementCard.label || 'card'}</strong> on the board</span>
+                    <span>Click to place <strong>{placementCard.label || 'card'}</strong> {placementCard.startFlipped ? 'face-down' : 'face-up'}</span>
                     <button onClick={onPlacementCancel}>✕ Cancel</button>
                 </div>
             )}
@@ -257,7 +263,7 @@ export default function GameCanvas({
                 />
             )}
 
-            <ContextMenu menu={menu} onClose={close} onViewImage={onViewImage} />
+            <ContextMenu menu={menu} onClose={close} onViewImage={onViewImage} onPlayCard={onPlayCard} />
         </div>
     );
 }

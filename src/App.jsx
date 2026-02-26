@@ -45,8 +45,8 @@ export default function App() {
   const bgTheme = BG_COLORS[background] || BG_COLORS['felt-green'];
 
   // Called from HandZone / ContextMenu "Play Card" action
-  const handlePlayCard = (obj) => {
-    setPlacementCard(obj);
+  const handlePlayCard = (obj, startFlipped = false) => {
+    setPlacementCard({ ...obj, startFlipped });
   };
 
   // Called when user clicks on the canvas during placement mode
@@ -54,7 +54,7 @@ export default function App() {
     if (!placementCard) return;
     updateObject(placementCard.id, {
       ownerId: null,
-      flipped: false,
+      flipped: placementCard.startFlipped || false,
       x: worldX - (placementCard.width || 80) / 2,
       y: worldY - (placementCard.height || 120) / 2,
     });
@@ -109,6 +109,7 @@ export default function App() {
         placementCard={placementCard}
         onPlacementConfirm={handlePlacementConfirm}
         onPlacementCancel={handlePlacementCancel}
+        onPlayCard={handlePlayCard}
         sidebarCollapsed={sidebarCollapsed}
         sidebarW={SIDEBAR_W}
       />

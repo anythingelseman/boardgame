@@ -18,18 +18,20 @@ export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) 
     const action = (fn) => (e) => { e.stopPropagation(); fn(); onClose(); };
 
     const isInHand = obj.ownerId === playerId;
+    const isDeck = !!obj.deckId;
 
     const rotate = () => updateObject(obj.id, { rotation: (obj.rotation + 90) % 360 });
     const flip = () => updateObject(obj.id, { flipped: !obj.flipped });
     const toHand = () => updateObject(obj.id, { ownerId: playerId });
     const fromHand = () => updateObject(obj.id, { ownerId: null });
     // Play card: enter placement mode so user can pick a spot on the canvas
-    const playCard = () => onPlayCard?.(obj);
+    const playCard = (flipped = false) => onPlayCard?.(obj, flipped);
     const del = () => removeObject(obj.id);
     const front = () => bringToFront(obj.id);
     const shuffle = () => shuffleDeck(obj.id);
     const drawTop = () => drawTopCard(obj.id, playerId);
     const drawBot = () => drawBottomCard(obj.id, playerId);
+    const flipTop = () => useGameStore.getState().flipTopCard(obj.id);
     const viewImage = () => onViewImage?.({ url: obj.imageUrl, label: obj.label });
 
     // Multi-select: create deck from selected cards
@@ -49,18 +51,19 @@ export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) 
         !isInHand && { label: '⬆  Bring to Front', fn: front },
 
         // Hand-specific
-        isInHand && { label: '▶  Play Card (face-up)', fn: playCard, highlight: true },
-        isInHand && { label: '🖐 Return to Board', fn: fromHand },
+        isInHand && { label: '▶  Play Card (face-up)', fn: () => playCard(false), highlight: true },
+        isInHand && { label: '🌘  Play Card (face-down)', fn: () => playCard(true), highlight: true },
+        isInHand && { label: '✋ Return to Board', fn: fromHand },
 
-        // Board card actions
-        obj.type === 'card' && !isInHand && { label: '🔄 Flip Card', fn: flip },
-        obj.type === 'card' && !isInHand && { label: '✋ Send to Hand', fn: toHand },
+        // Board card actions (Single card only)
+        obj.type === 'card' && !isInHand && !isDeck && { label: '🔄 Flip Card', fn: flip },
+        obj.type === 'card' && !isInHand && !isDeck && { label: '✋ Send to Hand', fn: toHand },
 
-        // Deck actions
-        obj.type === 'card' && !isInHand && { label: SEP },
-        obj.type === 'card' && !isInHand && { label: '🃏 Draw Top Card', fn: drawTop },
-        obj.type === 'card' && !isInHand && { label: '⬇ Draw Bottom Card', fn: drawBot },
-        obj.type === 'card' && !isInHand && { label: '🔀 Shuffle Deck', fn: shuffle },
+        // Deck actions (Only if part of a deck)
+        isDeck && !isInHand && { label: '🔄 Flip Top Card', fn: flipTop, highlight: true },
+        isDeck && !isInHand && { label: '🃏 Draw Top Card', fn: drawTop },
+        isDeck && !isInHand && { label: '⬇ Draw Bottom Card', fn: drawBot },
+        isDeck && !isInHand && { label: '🔀 Shuffle Deck', fn: shuffle },
 
         // Multi-select: stack into deck
         canMakeDeck && { label: SEP },
