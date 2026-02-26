@@ -83,15 +83,44 @@ export default function EditorPanel() {
                         </div>
                     </div>
 
-                    {/* Image URL */}
+                    {/* Image URL / Local Upload */}
                     <div className="mb-3">
                         <label className="text-[10px] text-stone-600 block mb-1">Image URL</label>
                         <input
-                            className="w-full bg-stone-800 border border-white/10 rounded px-2 py-1 text-xs text-stone-200 focus:outline-none focus:border-amber-500/50 transition-colors"
+                            className="w-full bg-stone-800 border border-white/10 rounded px-2 py-1 text-xs text-stone-200 focus:outline-none focus:border-amber-500/50 transition-colors mb-2"
                             value={selected.imageUrl || ''}
                             onChange={e => updateObject(selected.id, { imageUrl: e.target.value || null })}
                             placeholder="https://..."
                         />
+
+                        <label className="text-[10px] text-stone-500 hover:text-amber-500 cursor-pointer flex items-center gap-1.5 transition-colors group">
+                            <span className="text-sm group-hover:scale-110 transition-transform">📂</span>
+                            <span>Upload from File</span>
+                            <input
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    const reader = new FileReader();
+                                    reader.onload = (event) => {
+                                        const base64 = event.target.result;
+                                        // Update object with the base64 data URL
+                                        updateObject(selected.id, { imageUrl: base64 });
+                                    };
+                                    reader.readAsDataURL(file);
+                                }}
+                            />
+                        </label>
+                        {selected.imageUrl?.startsWith('data:image') && (
+                            <button
+                                className="text-[9px] text-red-500 hover:underline mt-1 block"
+                                onClick={() => updateObject(selected.id, { imageUrl: null })}
+                            >
+                                Clear uploaded image
+                            </button>
+                        )}
                     </div>
 
                     {/* Position readout */}
