@@ -165,15 +165,34 @@ export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapse
                     </div>
                 </div>
 
-                {/* ── Room info ── */}
+                {/* ── Room & Players info ── */}
                 {roomCode && (
                     <>
                         <div className="mx-3 border-t border-white/10 my-1" />
                         <div className="px-3 py-2">
-                            <div className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Room</div>
-                            <div className="bg-stone-800 rounded-lg px-3 py-2">
-                                <div className="text-[10px] text-stone-500">{role === 'host' ? 'You are Host' : 'Connected as Player'}</div>
-                                <div className="font-mono text-lg text-yellow-400 font-bold tracking-widest">{roomCode}</div>
+                            <div className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Room: {roomCode}</div>
+
+                            <div className="flex flex-col gap-1.5 mt-2">
+                                {useRoomStore.getState().players.map(p => {
+                                    const pHandCount = objects.filter(o => o.ownerId === p.id).length;
+                                    return (
+                                        <div key={p.id} className="flex items-center justify-between bg-white/5 rounded px-2 py-1.5 border border-white/5">
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <div
+                                                    className="w-2 h-2 rounded-full flex-shrink-0"
+                                                    style={{ background: p.color || '#f59e0b', boxShadow: `0 0 4px ${p.color || '#f59e0b'}` }}
+                                                />
+                                                <span className="text-xs text-stone-200 truncate font-medium">
+                                                    {p.name} {p.id === useRoomStore.getState().playerId && '(You)'}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 px-1.5 py-0.5 bg-black/30 rounded text-stone-400">
+                                                <span className="text-[10px]">✋</span>
+                                                <span className="text-[10px] font-bold font-mono">{pHandCount}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </>

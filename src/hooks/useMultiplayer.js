@@ -16,7 +16,8 @@ export default function useMultiplayer() {
     const pendingPos = useRef({});
     const throttleTimer = useRef(null);
 
-    const { roomCode, playerId, playerName, upsertPlayer, removePlayer, updateCursor } = useRoomStore();
+    const { roomCode, playerId, playerName, upsertPlayer, removePlayer, updateCursor, players } = useRoomStore();
+    const self = players.find(p => p.id === playerId);
 
     useEffect(() => {
         if (!roomCode) return;
@@ -26,7 +27,11 @@ export default function useMultiplayer() {
             cluster: PUSHER_CLUSTER,
             authEndpoint: '/api/auth',
             auth: {
-                params: { playerId, playerName }
+                params: {
+                    playerId,
+                    playerName,
+                    playerColor: self?.color || '#f59e0b'
+                }
             }
         });
         pusherRef.current = pusher;
@@ -37,6 +42,9 @@ export default function useMultiplayer() {
         channelRef.current = channel;
 
         const broadcast = (type, data) => {
+            // STOP ALL MESSAGES if tab is not visible
+            if (document.hidden) return;
+
             if (channel.subscribed) {
                 // Pusher client events MUST be prefixed with 'client-'
                 channel.trigger(`client-${type}`, data);
@@ -83,8 +91,8 @@ export default function useMultiplayer() {
                 if (Object.keys(changes).every(k => ['x', 'y', 'zIndex'].includes(k))) {
                     pendingPos.current[id] = { ...pendingPos.current[id], ...changes };
                     if (!throttleTimer.current) {
-                        // VERY CHEAP: 10 updates per second (100ms)
-                        throttleTimer.current = setTimeout(flushPositions, 100);
+                        // EXTREME ECONOMY: 150ms throttle for moves
+                        throttleTimer.current = setTimeout(flushPositions, 150);
                     }
                 } else {
                     broadcast('OBJECT_UPDATE', { objectId: id, changes });

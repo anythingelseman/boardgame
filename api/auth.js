@@ -22,11 +22,15 @@ export default async function handler(req, res) {
     const channel = req.body.channel_name;
     const playerId = req.body.playerId || 'anon';
     const playerName = req.body.playerName || 'Player';
+    const playerColor = req.body.playerColor || '#f59e0b';
 
     // Presence channels require user_id and user_info
     const presenceData = {
         user_id: playerId,
-        user_info: { name: playerName },
+        user_info: {
+            name: playerName,
+            color: playerColor
+        },
     };
 
     try {
