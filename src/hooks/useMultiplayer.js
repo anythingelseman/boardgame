@@ -16,21 +16,23 @@ export default function useMultiplayer() {
     const pendingPos = useRef({});
     const throttleTimer = useRef(null);
 
-    const { roomCode, playerId, upsertPlayer, removePlayer, updateCursor } = useRoomStore();
+    const { roomCode, playerId, playerName, upsertPlayer, removePlayer, updateCursor } = useRoomStore();
 
     useEffect(() => {
         if (!roomCode) return;
 
-        // Initialize Pusher
+        // Initialize Pusher with Presence support
         const pusher = new Pusher(PUSHER_KEY, {
             cluster: PUSHER_CLUSTER,
-            authEndpoint: '/api/auth', // This hits our Vercel Serverless Function
+            authEndpoint: '/api/auth',
+            auth: {
+                params: { playerId, playerName }
+            }
         });
         pusherRef.current = pusher;
 
-        // Subscribe to a private channel for the room
-        // Note: Client events require a 'private-' or 'presence-' prefix
-        const channelName = `private-room-${roomCode}`;
+        // Note: Presence channels require 'presence-' prefix
+        const channelName = `presence-room-${roomCode}`;
         const channel = pusher.subscribe(channelName);
         channelRef.current = channel;
 
@@ -54,11 +56,7 @@ export default function useMultiplayer() {
         // ── Store Subscription ───────────────────────────────────────────
         let prevObjects = useGameStore.getState().objects;
         const unsubscribe = useGameStore.subscribe((state) => {
-            if (isReceiving.current) {
-                prevObjects = state.objects;
-                return;
-            }
-            if (state.objects === prevObjects) return;
+            if (isReceiving.current || state.objects === prevObjects) return;
 
             const prevMap = new Map(prevObjects.map(o => [o.id, o]));
             const newMap = new Map(state.objects.map(o => [o.id, o]));
@@ -85,8 +83,8 @@ export default function useMultiplayer() {
                 if (Object.keys(changes).every(k => ['x', 'y', 'zIndex'].includes(k))) {
                     pendingPos.current[id] = { ...pendingPos.current[id], ...changes };
                     if (!throttleTimer.current) {
-                        // Slow down to 15fps (66ms) - CSS transition smooths it out
-                        throttleTimer.current = setTimeout(flushPositions, 66);
+                        // VERY CHEAP: 10 updates per second (100ms)
+                        throttleTimer.current = setTimeout(flushPositions, 100);
                     }
                 } else {
                     broadcast('OBJECT_UPDATE', { objectId: id, changes });
@@ -95,13 +93,32 @@ export default function useMultiplayer() {
             prevObjects = state.objects;
         });
 
-        // ── Handle Incoming Events ───────────────────────────────────────
-        channel.bind('subscription_succeeded', () => {
-            console.log('[Multiplayer] Subscribed to room');
-            const self = useRoomStore.getState().players.find(p => p.id === playerId);
-            if (self) broadcast('PLAYER_JOIN', { player: self });
+        // ── Presence Events (Automatic Discovery) ────────────────────────
+        channel.bind('pusher:subscription_succeeded', (members) => {
+            console.log('[Multiplayer] Presence synchronized. Members:', members.count);
+            members.each(member => {
+                if (member.id !== playerId) {
+                    upsertPlayer({ id: member.id, name: member.info.name, color: '#f59e0b', cursor: null });
+                }
+            });
+            // Send full board state to everyone to ensure we are aligned
+            broadcast('STATE_SYNC', {
+                objects: useGameStore.getState().objects,
+                targetId: 'all', // Simplify sync
+            });
         });
 
+        channel.bind('pusher:member_added', (member) => {
+            console.log('[Multiplayer] Player joined:', member.info.name);
+            upsertPlayer({ id: member.id, name: member.info.name, color: '#f59e0b', cursor: null });
+        });
+
+        channel.bind('pusher:member_removed', (member) => {
+            console.log('[Multiplayer] Player left:', member.id);
+            removePlayer(member.id);
+        });
+
+        // ── Handle Incoming Messages ─────────────────────────────────────
         const handleMsg = (type, msg) => {
             const store = useGameStore.getState();
             switch (type) {
@@ -126,7 +143,7 @@ export default function useMultiplayer() {
                     isReceiving.current = false;
                     break;
                 case 'STATE_SYNC':
-                    if (msg.targetId !== playerId) break;
+                    if (msg.targetId !== 'all' && msg.targetId !== playerId) break;
                     isReceiving.current = true;
                     store.loadBoard(msg.objects);
                     isReceiving.current = false;
@@ -136,21 +153,6 @@ export default function useMultiplayer() {
                         updateCursor(msg.senderId, msg.cursor);
                     }
                     break;
-                case 'PLAYER_JOIN': {
-                    if (msg.player.id === playerId) break;
-                    const players = useRoomStore.getState().players;
-                    const alreadyKnown = players.some(p => p.id === msg.player.id);
-                    upsertPlayer(msg.player);
-                    if (!alreadyKnown) {
-                        const self = players.find(p => p.id === playerId);
-                        if (self) broadcast('PLAYER_JOIN', { player: self });
-                        broadcast('STATE_SYNC', {
-                            objects: store.objects,
-                            targetId: msg.player.id,
-                        });
-                    }
-                    break;
-                }
             }
         };
 
@@ -160,7 +162,6 @@ export default function useMultiplayer() {
         channel.bind('client-OBJECTS_UPDATE_BATCH', (data) => handleMsg('OBJECTS_UPDATE_BATCH', data));
         channel.bind('client-STATE_SYNC', (data) => handleMsg('STATE_SYNC', data));
         channel.bind('client-CURSOR', (data) => handleMsg('CURSOR', data));
-        channel.bind('client-PLAYER_JOIN', (data) => handleMsg('PLAYER_JOIN', data));
 
         return () => {
             unsubscribe();
@@ -175,13 +176,13 @@ export default function useMultiplayer() {
 
     const broadcastCursor = (cursor) => {
         const now = Date.now();
-        // Only send every 100ms
-        if (now - lastCursorSent.current < 100) return;
+        // SUPER CHEAP: Only 5 updates per second (200ms)
+        if (now - lastCursorSent.current < 200) return;
 
-        // Only send if moved at least 5 pixels (saves messages when mouse is idle-ish)
+        // Threshold: Only send if moved at least 10 pixels
         const dx = cursor.x - lastCursorPos.current.x;
         const dy = cursor.y - lastCursorPos.current.y;
-        if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
 
         if (channelRef.current?.subscribed) {
             channelRef.current.trigger('client-CURSOR', { senderId: playerId, cursor });

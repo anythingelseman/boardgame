@@ -20,9 +20,20 @@ export default async function handler(req, res) {
 
     const socketId = req.body.socket_id;
     const channel = req.body.channel_name;
+    const playerId = req.body.playerId || 'anon';
+    const playerName = req.body.playerName || 'Player';
 
-    // In a real app, you'd verify the user's session here.
-    // For a sandbox, we'll allow anyone to join the channel they request.
-    const authResponse = pusher.authorizeChannel(socketId, channel);
-    res.send(authResponse);
+    // Presence channels require user_id and user_info
+    const presenceData = {
+        user_id: playerId,
+        user_info: { name: playerName },
+    };
+
+    try {
+        const authResponse = pusher.authorizeChannel(socketId, channel, presenceData);
+        res.send(authResponse);
+    } catch (err) {
+        console.error('Pusher Auth Error:', err);
+        res.status(500).send('Internal Server Error');
+    }
 }
