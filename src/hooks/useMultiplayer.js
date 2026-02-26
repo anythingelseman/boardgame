@@ -43,11 +43,12 @@ export default function useMultiplayer() {
 
         const flushPositions = () => {
             throttleTimer.current = null;
-            const pending = pendingPos.current;
+            const updates = pendingPos.current;
+            if (Object.keys(updates).length === 0) return;
             pendingPos.current = {};
-            for (const [objectId, changes] of Object.entries(pending)) {
-                broadcast('OBJECT_UPDATE', { objectId, changes });
-            }
+
+            // BATCH: Send all updates in a single Pusher message
+            broadcast('OBJECTS_UPDATE_BATCH', { updates });
         };
 
         // ── Store Subscription ───────────────────────────────────────────
@@ -84,7 +85,8 @@ export default function useMultiplayer() {
                 if (Object.keys(changes).every(k => ['x', 'y', 'zIndex'].includes(k))) {
                     pendingPos.current[id] = { ...pendingPos.current[id], ...changes };
                     if (!throttleTimer.current) {
-                        throttleTimer.current = setTimeout(flushPositions, 33);
+                        // Slow down to 15fps (66ms) - CSS transition smooths it out
+                        throttleTimer.current = setTimeout(flushPositions, 66);
                     }
                 } else {
                     broadcast('OBJECT_UPDATE', { objectId: id, changes });
@@ -95,6 +97,7 @@ export default function useMultiplayer() {
 
         // ── Handle Incoming Events ───────────────────────────────────────
         channel.bind('subscription_succeeded', () => {
+            console.log('[Multiplayer] Subscribed to room');
             const self = useRoomStore.getState().players.find(p => p.id === playerId);
             if (self) broadcast('PLAYER_JOIN', { player: self });
         });
@@ -117,6 +120,11 @@ export default function useMultiplayer() {
                     store.updateObject(msg.objectId, msg.changes);
                     isReceiving.current = false;
                     break;
+                case 'OBJECTS_UPDATE_BATCH':
+                    isReceiving.current = true;
+                    store.updateManyObjects(msg.updates);
+                    isReceiving.current = false;
+                    break;
                 case 'STATE_SYNC':
                     if (msg.targetId !== playerId) break;
                     isReceiving.current = true;
@@ -124,7 +132,9 @@ export default function useMultiplayer() {
                     isReceiving.current = false;
                     break;
                 case 'CURSOR':
-                    if (msg.playerId !== playerId) updateCursor(msg.playerId, msg.cursor);
+                    if (msg.senderId !== playerId) {
+                        updateCursor(msg.senderId, msg.cursor);
+                    }
                     break;
                 case 'PLAYER_JOIN': {
                     if (msg.player.id === playerId) break;
@@ -147,6 +157,7 @@ export default function useMultiplayer() {
         channel.bind('client-OBJECT_ADD', (data) => handleMsg('OBJECT_ADD', data));
         channel.bind('client-OBJECT_REMOVE', (data) => handleMsg('OBJECT_REMOVE', data));
         channel.bind('client-OBJECT_UPDATE', (data) => handleMsg('OBJECT_UPDATE', data));
+        channel.bind('client-OBJECTS_UPDATE_BATCH', (data) => handleMsg('OBJECTS_UPDATE_BATCH', data));
         channel.bind('client-STATE_SYNC', (data) => handleMsg('STATE_SYNC', data));
         channel.bind('client-CURSOR', (data) => handleMsg('CURSOR', data));
         channel.bind('client-PLAYER_JOIN', (data) => handleMsg('PLAYER_JOIN', data));
@@ -173,7 +184,7 @@ export default function useMultiplayer() {
         if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
 
         if (channelRef.current?.subscribed) {
-            channelRef.current.trigger('client-CURSOR', { playerId, cursor });
+            channelRef.current.trigger('client-CURSOR', { senderId: playerId, cursor });
             lastCursorSent.current = now;
             lastCursorPos.current = cursor;
         }
