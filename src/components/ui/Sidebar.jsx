@@ -179,7 +179,7 @@ export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapse
                                         <div key={p.id} className="flex items-center justify-between bg-white/5 rounded px-2 py-1.5 border border-white/5">
                                             <div className="flex items-center gap-2 overflow-hidden">
                                                 <div
-                                                    className="w-2 h-2 rounded-full flex-shrink-0"
+                                                    className="w-2 h-2 rounded-full shrink-0"
                                                     style={{ background: p.color || '#f59e0b', boxShadow: `0 0 4px ${p.color || '#f59e0b'}` }}
                                                 />
                                                 <span className="text-xs text-stone-200 truncate font-medium">

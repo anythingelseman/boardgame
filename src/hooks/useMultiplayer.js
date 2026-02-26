@@ -3,17 +3,19 @@ import Pusher from 'pusher-js';
 import useGameStore from '../store/gameStore';
 import useRoomStore from '../store/roomStore';
 
-const PUSHER_KEY = "ac8b4537a8529842be77";
-const PUSHER_CLUSTER = "ap1";
+const PUSHER_KEY = 'ac8b4537a8529842be77';
+const PUSHER_CLUSTER = 'ap1';
 
 /**
- * Pusher (Vercel-compatible) multiplayer sync.
+ * Custom hook to handle Pusher realtime synchronization.
+ * Uses Presence Channels to track players and coordinate object updates.
  */
 export default function useMultiplayer() {
     const pusherRef = useRef(null);
     const channelRef = useRef(null);
     const isReceiving = useRef(false);
     const pendingPos = useRef({});
+    const lastSentPos = useRef({}); // Track last broadcast position per object
     const throttleTimer = useRef(null);
 
     const { roomCode, playerId, playerName, upsertPlayer, removePlayer, updateCursor, players } = useRoomStore();
@@ -46,7 +48,6 @@ export default function useMultiplayer() {
             if (document.hidden) return;
 
             if (channel.subscribed) {
-                // Pusher client events MUST be prefixed with 'client-'
                 channel.trigger(`client-${type}`, data);
             }
         };
@@ -57,8 +58,22 @@ export default function useMultiplayer() {
             if (Object.keys(updates).length === 0) return;
             pendingPos.current = {};
 
-            // BATCH: Send all updates in a single Pusher message
-            broadcast('OBJECTS_UPDATE_BATCH', { updates });
+            // Filter out objects that haven't moved enough since last sent
+            const filteredUpdates = {};
+            for (const [id, pos] of Object.entries(updates)) {
+                const last = lastSentPos.current[id] || { x: -9999, y: -9999 };
+                const dist = Math.sqrt(Math.pow(pos.x - last.x, 2) + Math.pow(pos.y - last.y, 2));
+
+                // Only send if moved at least 5 pixels
+                if (dist > 5) {
+                    filteredUpdates[id] = pos;
+                    lastSentPos.current[id] = { x: pos.x, y: pos.y };
+                }
+            }
+
+            if (Object.keys(filteredUpdates).length > 0) {
+                broadcast('OBJECTS_UPDATE_BATCH', { updates: filteredUpdates });
+            }
         };
 
         // ── Store Subscription ───────────────────────────────────────────
@@ -91,8 +106,8 @@ export default function useMultiplayer() {
                 if (Object.keys(changes).every(k => ['x', 'y', 'zIndex'].includes(k))) {
                     pendingPos.current[id] = { ...pendingPos.current[id], ...changes };
                     if (!throttleTimer.current) {
-                        // EXTREME ECONOMY: 150ms throttle for moves
-                        throttleTimer.current = setTimeout(flushPositions, 150);
+                        // ULTRA ECONOMY: 250ms throttle for moves (4 times per second)
+                        throttleTimer.current = setTimeout(flushPositions, 250);
                     }
                 } else {
                     broadcast('OBJECT_UPDATE', { objectId: id, changes });
@@ -106,19 +121,29 @@ export default function useMultiplayer() {
             console.log('[Multiplayer] Presence synchronized. Members:', members.count);
             members.each(member => {
                 if (member.id !== playerId) {
-                    upsertPlayer({ id: member.id, name: member.info.name, color: '#f59e0b', cursor: null });
+                    upsertPlayer({
+                        id: member.id,
+                        name: member.info.name,
+                        color: member.info.color || '#f59e0b',
+                        cursor: null
+                    });
                 }
             });
             // Send full board state to everyone to ensure we are aligned
             broadcast('STATE_SYNC', {
                 objects: useGameStore.getState().objects,
-                targetId: 'all', // Simplify sync
+                targetId: 'all',
             });
         });
 
         channel.bind('pusher:member_added', (member) => {
             console.log('[Multiplayer] Player joined:', member.info.name);
-            upsertPlayer({ id: member.id, name: member.info.name, color: '#f59e0b', cursor: null });
+            upsertPlayer({
+                id: member.id,
+                name: member.info.name,
+                color: member.info.color || '#f59e0b',
+                cursor: null
+            });
         });
 
         channel.bind('pusher:member_removed', (member) => {
@@ -157,9 +182,7 @@ export default function useMultiplayer() {
                     isReceiving.current = false;
                     break;
                 case 'CURSOR':
-                    if (msg.senderId !== playerId) {
-                        updateCursor(msg.senderId, msg.cursor);
-                    }
+                    if (msg.senderId !== playerId) updateCursor(msg.senderId, msg.cursor);
                     break;
             }
         };
@@ -183,14 +206,16 @@ export default function useMultiplayer() {
     const lastCursorPos = useRef({ x: 0, y: 0 });
 
     const broadcastCursor = (cursor) => {
+        if (document.hidden) return;
         const now = Date.now();
-        // SUPER CHEAP: Only 5 updates per second (200ms)
-        if (now - lastCursorSent.current < 200) return;
 
-        // Threshold: Only send if moved at least 10 pixels
+        // GHOST MODE: Only update cursor every 1.5 seconds
+        if (now - lastCursorSent.current < 1500) return;
+
+        // Big Threshold: 60 pixels
         const dx = cursor.x - lastCursorPos.current.x;
         const dy = cursor.y - lastCursorPos.current.y;
-        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        if (Math.abs(dx) < 60 && Math.abs(dy) < 60) return;
 
         if (channelRef.current?.subscribed) {
             channelRef.current.trigger('client-CURSOR', { senderId: playerId, cursor });
