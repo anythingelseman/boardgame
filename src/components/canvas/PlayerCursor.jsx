@@ -1,10 +1,16 @@
+import useGameStore from '../../store/gameStore';
+
 /**
- * Renders another player's cursor as a colored dot + name label
+ * Renders another player's cursor as a colored dot + name label + hand count
  * positioned in world coordinates on the canvas.
  */
 export default function PlayerCursor({ player }) {
-    const { name, color, cursor } = player;
+    const { id, name, color, cursor } = player;
+    const { objects } = useGameStore();
+
     if (!cursor) return null;
+
+    const handCount = objects.filter(o => o.ownerId === id).length;
 
     return (
         <div
@@ -29,7 +35,7 @@ export default function PlayerCursor({ player }) {
                     boxShadow: `0 0 6px ${color || '#f59e0b'}88`,
                 }}
             />
-            {/* Name label */}
+            {/* Name label + Hand count */}
             <div
                 style={{
                     marginTop: 4,
@@ -38,13 +44,22 @@ export default function PlayerCursor({ player }) {
                     color: '#000',
                     fontSize: 10,
                     fontWeight: 700,
-                    padding: '1px 6px',
+                    padding: '2px 6px',
                     borderRadius: 4,
                     whiteSpace: 'nowrap',
                     boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
                 }}
             >
-                {name}
+                <span>{name}</span>
+                {handCount > 0 && (
+                    <div className="flex items-center gap-1 px-1.5 py-0.5 bg-black/20 rounded border border-black/10">
+                        <span>✋</span>
+                        <span>{handCount}</span>
+                    </div>
+                )}
             </div>
         </div>
     );

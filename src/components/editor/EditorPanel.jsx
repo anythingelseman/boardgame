@@ -103,11 +103,32 @@ export default function EditorPanel() {
                                 onChange={(e) => {
                                     const file = e.target.files?.[0];
                                     if (!file) return;
+
                                     const reader = new FileReader();
                                     reader.onload = (event) => {
-                                        const base64 = event.target.result;
-                                        // Update object with the base64 data URL
-                                        updateObject(selected.id, { imageUrl: base64 });
+                                        const img = new Image();
+                                        img.onload = () => {
+                                            const canvas = document.createElement('canvas');
+                                            // Resize to a small thumbnail to stay under Pusher's 10KB limit
+                                            const MAX_DIM = 200;
+                                            let w = img.width;
+                                            let h = img.height;
+                                            if (w > h) {
+                                                if (w > MAX_DIM) { h *= MAX_DIM / w; w = MAX_DIM; }
+                                            } else {
+                                                if (h > MAX_DIM) { w *= MAX_DIM / h; h = MAX_DIM; }
+                                            }
+                                            canvas.width = w;
+                                            canvas.height = h;
+                                            const ctx = canvas.getContext('2d');
+                                            ctx.drawImage(img, 0, 0, w, h);
+
+                                            // Compress heavily to stay under 10KB
+                                            // Pusher free limit is 10KB per message
+                                            const compressed = canvas.toDataURL('image/jpeg', 0.6);
+                                            updateObject(selected.id, { imageUrl: compressed });
+                                        };
+                                        img.src = event.target.result;
                                     };
                                     reader.readAsDataURL(file);
                                 }}

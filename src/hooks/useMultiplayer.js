@@ -160,13 +160,22 @@ export default function useMultiplayer() {
     }, [roomCode]); // eslint-disable-line
 
     const lastCursorSent = useRef(0);
+    const lastCursorPos = useRef({ x: 0, y: 0 });
+
     const broadcastCursor = (cursor) => {
         const now = Date.now();
-        if (now - lastCursorSent.current < 50) return; // Only send 20 times per second
+        // Only send every 100ms
+        if (now - lastCursorSent.current < 100) return;
+
+        // Only send if moved at least 5 pixels (saves messages when mouse is idle-ish)
+        const dx = cursor.x - lastCursorPos.current.x;
+        const dy = cursor.y - lastCursorPos.current.y;
+        if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
 
         if (channelRef.current?.subscribed) {
             channelRef.current.trigger('client-CURSOR', { playerId, cursor });
             lastCursorSent.current = now;
+            lastCursorPos.current = cursor;
         }
     };
 
