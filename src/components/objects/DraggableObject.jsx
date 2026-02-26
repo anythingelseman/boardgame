@@ -99,6 +99,8 @@ export default function DraggableObject({ obj, transform, onContextMenu, childre
         zIndex: obj.zIndex,
         cursor: dragging ? 'grabbing' : 'grab',
         touchAction: 'none',
+        // Smooth out remote movements, but keep local dragging instant
+        transition: dragging ? 'none' : 'left 0.12s linear, top 0.12s linear, transform 0.2s ease-out',
     };
 
     return (

@@ -159,9 +159,14 @@ export default function useMultiplayer() {
         };
     }, [roomCode]); // eslint-disable-line
 
+    const lastCursorSent = useRef(0);
     const broadcastCursor = (cursor) => {
+        const now = Date.now();
+        if (now - lastCursorSent.current < 50) return; // Only send 20 times per second
+
         if (channelRef.current?.subscribed) {
             channelRef.current.trigger('client-CURSOR', { playerId, cursor });
+            lastCursorSent.current = now;
         }
     };
 
