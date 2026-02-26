@@ -2,21 +2,21 @@ import { useEffect, useRef } from 'react';
 import useGameStore from '../store/gameStore';
 import useRoomStore from '../store/roomStore';
 
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_URL = `${protocol}//${window.location.hostname}:4000`;
+
 /**
- * BroadcastChannel multiplayer sync.
+ * WebSocket multiplayer sync.
  *
  * Design:
+ *  - Connects to the relay server at ws://localhost:4000?room=ROOMCODE
  *  - Zustand subscription diffs objects and sends granular messages.
- *  - isReceiving flag (reset SYNCHRONOUSLY, not via RAF) prevents echo.
- *    Zustand listeners fire synchronously inside set(), so:
- *      isReceiving = true → store.updateObject() → listener skips → isReceiving = false
- *    is safe and has zero timing gap.
+ *  - isReceiving flag prevents echo-back (synchronous Zustand set → subscribe).
  *  - Position-only (x/y/zIndex) updates throttled to ~30fps.
- *  - PLAYER_JOIN only replied to once per player (alreadyKnown guard).
- *  - STATE_SYNC carries targetId so only the new joiner calls loadBoard().
+ *  - PLAYER_JOIN / STATE_SYNC handshake syncs board state for new joiners.
  */
 export default function useMultiplayer() {
-    const channelRef = useRef(null);
+    const wsRef = useRef(null);
     const isReceiving = useRef(false);
     const pendingPos = useRef({});
     const throttleTimer = useRef(null);
@@ -26,11 +26,26 @@ export default function useMultiplayer() {
     useEffect(() => {
         if (!roomCode) return;
 
-        const ch = new BroadcastChannel(`boardgame-${roomCode}`);
-        channelRef.current = ch;
-        setChannel(ch);
+        const ws = new WebSocket(`${WS_URL}?room=${roomCode}`);
+        wsRef.current = ws;
+
+        // Expose send via the existing setChannel interface (re-used as generic send)
+        // We'll send directly via wsRef to keep things simple.
 
         const POSITION_KEYS = new Set(['x', 'y', 'zIndex']);
+
+        const send = (msg) => {
+            if (ws.readyState === WebSocket.OPEN) {
+                console.log(`[Multiplayer] Sending ${msg.type}`);
+                ws.send(JSON.stringify(msg));
+            } else {
+                // Queue until open
+                ws.addEventListener('open', () => {
+                    console.log(`[Multiplayer] Sending queued ${msg.type}`);
+                    ws.send(JSON.stringify(msg));
+                }, { once: true });
+            }
+        };
 
         // Flush throttled position updates
         const flushPositions = () => {
@@ -38,28 +53,34 @@ export default function useMultiplayer() {
             const pending = pendingPos.current;
             pendingPos.current = {};
             for (const [objectId, changes] of Object.entries(pending)) {
-                ch.postMessage({ type: 'OBJECT_UPDATE', objectId, changes });
+                send({ type: 'OBJECT_UPDATE', objectId, changes });
             }
         };
 
-        // ── Subscribe to local store; diff and broadcast changes ─────────
-        const unsubscribe = useGameStore.subscribe((state, prev) => {
-            if (isReceiving.current) return;
-            if (state.objects === prev.objects) return;
+        // ── Subscribe to local store; diff and broadcast changes ──────────
+        // Zustand 5 subscribe doesn't provide prev state, so we track it manually
+        let prevObjects = useGameStore.getState().objects;
 
-            const prevMap = new Map(prev.objects.map(o => [o.id, o]));
+        const unsubscribe = useGameStore.subscribe((state) => {
+            if (isReceiving.current) {
+                prevObjects = state.objects;
+                return;
+            }
+            if (state.objects === prevObjects) return;
+
+            const prevMap = new Map(prevObjects.map(o => [o.id, o]));
             const newMap = new Map(state.objects.map(o => [o.id, o]));
 
             // Added objects
             for (const [id, obj] of newMap) {
                 if (!prevMap.has(id)) {
-                    ch.postMessage({ type: 'OBJECT_ADD', object: obj });
+                    send({ type: 'OBJECT_ADD', object: obj });
                 }
             }
             // Removed objects
             for (const [id] of prevMap) {
                 if (!newMap.has(id)) {
-                    ch.postMessage({ type: 'OBJECT_REMOVE', objectId: id });
+                    send({ type: 'OBJECT_REMOVE', objectId: id });
                 }
             }
             // Changed objects
@@ -81,44 +102,59 @@ export default function useMultiplayer() {
                     }
                 } else {
                     // Structural changes (flip, rotate, color, label…) — immediate
-                    ch.postMessage({ type: 'OBJECT_UPDATE', objectId: id, changes });
+                    send({ type: 'OBJECT_UPDATE', objectId: id, changes });
                 }
             }
+
+            prevObjects = state.objects;
         });
 
-        // Announce ourselves
-        const self = useRoomStore.getState().players.find(p => p.id === playerId);
-        if (self) ch.postMessage({ type: 'PLAYER_JOIN', player: self });
+        // ── Announce ourselves once the socket is open ────────────────────
+        ws.addEventListener('open', () => {
+            const self = useRoomStore.getState().players.find(p => p.id === playerId);
+            if (self) send({ type: 'PLAYER_JOIN', player: self });
+        }, { once: true });
 
-        // ── Handle incoming messages ─────────────────────────────────────
-        ch.onmessage = (e) => {
-            const msg = e.data;
+        // ── Handle incoming messages ──────────────────────────────────────
+        ws.onmessage = async (e) => {
+            let msg;
+            try {
+                // Handle Blob vs String
+                const data = e.data instanceof Blob ? await e.data.text() : e.data;
+                msg = JSON.parse(data);
+            } catch (err) {
+                console.warn('[Multiplayer] Failed to parse message:', err);
+                return;
+            }
+
             const store = useGameStore.getState();
 
             switch (msg.type) {
 
                 case 'OBJECT_ADD':
-                    // Set flag, update store (listener fires & skips), clear flag — all sync
+                    console.log('[Multiplayer] Adding object');
                     isReceiving.current = true;
                     store.addObject(msg.object);
                     isReceiving.current = false;
                     break;
 
                 case 'OBJECT_REMOVE':
+                    console.log('[Multiplayer] Removing object');
                     isReceiving.current = true;
                     store.removeObject(msg.objectId);
                     isReceiving.current = false;
                     break;
 
                 case 'OBJECT_UPDATE':
+                    // Silently update common position changes
                     isReceiving.current = true;
                     store.updateObject(msg.objectId, msg.changes);
                     isReceiving.current = false;
                     break;
 
                 case 'STATE_SYNC':
-                    // Only the intended recipient applies the full board
                     if (msg.targetId !== playerId) break;
+                    console.log('[Multiplayer] Syncing full board state');
                     isReceiving.current = true;
                     store.loadBoard(msg.objects);
                     isReceiving.current = false;
@@ -132,24 +168,21 @@ export default function useMultiplayer() {
 
                 case 'PLAYER_JOIN': {
                     if (msg.player.id === playerId) break;
+                    console.log('[Multiplayer] Player joined:', msg.player.name);
 
-                    // Check BEFORE upserting so we only reply the first time
                     const alreadyKnown = useRoomStore.getState().players
                         .some(p => p.id === msg.player.id);
 
                     upsertPlayer(msg.player);
 
                     if (!alreadyKnown) {
-                        // Reply once with our own presence
                         const selfNow = useRoomStore.getState().players
                             .find(p => p.id === playerId);
-                        if (selfNow) {
-                            ch.postMessage({ type: 'PLAYER_JOIN', player: selfNow });
-                        }
-                        // Push full board only to the new joiner
-                        ch.postMessage({
+                        if (selfNow) send({ type: 'PLAYER_JOIN', player: selfNow });
+
+                        send({
                             type: 'STATE_SYNC',
-                            objects: store.objects,
+                            objects: useGameStore.getState().objects,
                             targetId: msg.player.id,
                         });
                     }
@@ -157,6 +190,7 @@ export default function useMultiplayer() {
                 }
 
                 case 'PLAYER_LEAVE':
+                    console.log('[Multiplayer] Player left');
                     removePlayer(msg.playerId);
                     break;
 
@@ -165,9 +199,19 @@ export default function useMultiplayer() {
             }
         };
 
+        ws.onerror = (e) => {
+            console.error('[Multiplayer] WebSocket error:', e);
+        };
+
+        ws.onclose = (e) => {
+            console.log(`[Multiplayer] Disconnected (code: ${e.code})`);
+        };
+
         const handleUnload = () => {
-            ch.postMessage({ type: 'PLAYER_LEAVE', playerId });
-            ch.close();
+            if (ws.readyState === WebSocket.OPEN) {
+                send({ type: 'PLAYER_LEAVE', playerId });
+            }
+            ws.close();
         };
         window.addEventListener('beforeunload', handleUnload);
 
@@ -176,13 +220,14 @@ export default function useMultiplayer() {
             if (throttleTimer.current) clearTimeout(throttleTimer.current);
             handleUnload();
             window.removeEventListener('beforeunload', handleUnload);
-            channelRef.current = null;
+            wsRef.current = null;
         };
     }, [roomCode]); // eslint-disable-line
 
     const broadcastCursor = (cursor) => {
-        if (!channelRef.current) return;
-        channelRef.current.postMessage({ type: 'CURSOR', playerId, cursor });
+        const ws = wsRef.current;
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        ws.send(JSON.stringify({ type: 'CURSOR', playerId, cursor }));
     };
 
     return { broadcastCursor };

@@ -70,7 +70,14 @@ export default function RoomModal({ onClose }) {
                                 <div className="text-center py-4">
                                     <div className="text-stone-500 text-sm mb-2">Room created! Share this code:</div>
                                     <div className="font-mono text-4xl font-black text-yellow-400 tracking-widest mb-4 select-all">{created}</div>
-                                    <p className="text-xs text-stone-600 mb-4">Open another browser tab and Join with this code to test multiplayer.</p>
+                                    <div className="bg-stone-800/80 rounded-lg px-3 py-2 mb-4 text-left">
+                                        <p className="text-[11px] text-stone-400 leading-relaxed">
+                                            Share the code with other players. They open <span className="text-green-400 font-mono">localhost:5173</span> in their browser and join with this code.
+                                        </p>
+                                        <p className="text-[11px] text-stone-600 mt-1">
+                                            Make sure the relay server is running: <span className="font-mono text-amber-500">npm run dev:all</span>
+                                        </p>
+                                    </div>
                                     <button
                                         className="w-full py-2.5 rounded-lg bg-green-700 hover:bg-green-600 text-white font-semibold text-sm transition-colors"
                                         onClick={onClose}
