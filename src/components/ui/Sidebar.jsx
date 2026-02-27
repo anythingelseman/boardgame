@@ -136,32 +136,39 @@ export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapse
 
                 <div className="mx-3 border-t border-white/10 my-1" />
 
-                {/* ── View Controls ── */}
+                {/* ── Dice Roller ── */}
                 <div className="px-3 py-2">
-                    <div className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">View</div>
-                    <button
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors
-            ${showGrid ? 'bg-green-900/50 text-green-400 border border-green-500/30' : 'text-stone-400 hover:bg-white/5 border border-transparent'}`}
-                        onClick={toggleGrid}
-                    >
-                        <span>⊞</span> Grid Overlay
-                    </button>
-                </div>
+                    <div className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Dice Roller</div>
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between bg-black/20 rounded-lg p-1 border border-white/5">
+                            {[1, 2, 3, 4].map(num => {
+                                const activeCount = useGameStore(state => state.diceCount);
+                                return (
+                                    <button
+                                        key={num}
+                                        onClick={() => useGameStore.getState().setDiceCount(num)}
+                                        className={`flex-1 py-1 text-[10px] font-bold rounded transition-colors ${activeCount === num ? 'bg-amber-600 text-white' : 'text-stone-500 hover:text-stone-300'}`}
+                                    >
+                                        {num}d
+                                    </button>
+                                );
+                            })}
+                        </div>
 
-                <div className="mx-3 border-t border-white/10 my-1" />
+                        <button
+                            onClick={() => useGameStore.getState().rollDice(useRoomStore.getState().playerName)}
+                            className="w-full py-2 bg-linear-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-lg font-bold text-sm shadow-lg transform active:scale-95 transition-all flex items-center justify-center gap-2"
+                        >
+                            <span>🎲</span> Roll
+                        </button>
 
-                {/* ── Mode Toggle ── */}
-                <div className="px-3 py-2">
-                    <div className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Mode</div>
-                    <div className="flex rounded-lg overflow-hidden border border-white/10">
-                        <button
-                            className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${mode === 'play' ? 'bg-green-700 text-white' : 'text-stone-400 hover:bg-white/5'}`}
-                            onClick={() => setMode('play')}
-                        >▶ Play</button>
-                        <button
-                            className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${mode === 'editor' ? 'bg-amber-700 text-white' : 'text-stone-400 hover:bg-white/5'}`}
-                            onClick={() => setMode('editor')}
-                        >✏ Editor</button>
+                        <div className="flex flex-wrap justify-center gap-2 mt-1 min-h-[32px]">
+                            {useGameStore(state => state.diceResults).map((val, i) => (
+                                <div key={i} className="w-8 h-8 rounded bg-white text-stone-900 flex items-center justify-center text-sm font-black shadow-md border-b-2 border-stone-300">
+                                    {val}
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
 

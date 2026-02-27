@@ -18,7 +18,7 @@ export default function GameToken({ obj, transform, onContextMenu }) {
                         src={obj.imageUrl}
                         alt={obj.label}
                         scale={transform.scale}
-                        style={{ objectFit: 'contain', borderRadius: '50%' }}
+                        style={{ objectFit: 'cover', borderRadius: '50%' }}
                     />
                 ) : (
                     <span className="text-white font-bold select-none drop-shadow z-10"

@@ -17,6 +17,7 @@ import Sidebar from './components/ui/Sidebar';
 import HandZone from './components/ui/HandZone';
 import RoomModal from './components/ui/RoomModal';
 import ImageModal from './components/ui/ImageModal';
+import DiceNotification from './components/ui/DiceNotification';
 
 // Editor
 import EditorPanel from './components/editor/EditorPanel';
@@ -64,10 +65,22 @@ export default function App() {
 
   const handlePlacementCancel = () => setPlacementCard(null);
 
-  // Escape key cancels placement
+  // Keyboard shortcuts
+  const { objects, selectedIds } = useGameStore();
   const handleKeyDown = (e) => {
-    if (e.key === 'Escape' && placementCard) {
-      handlePlacementCancel();
+    // Escape key
+    if (e.key === 'Escape') {
+      if (imageModal) setImageModal(null);
+      if (placementCard) handlePlacementCancel();
+    }
+
+    // Spacebar to view selected card
+    if (e.key === ' ' && !placementCard && selectedIds.length === 1) {
+      const selected = objects.find(o => o.id === selectedIds[0]);
+      if (selected?.imageUrl) {
+        e.preventDefault(); // Stop page scroll
+        setImageModal({ url: selected.imageUrl, label: selected.label });
+      }
     }
   };
 
@@ -121,6 +134,7 @@ export default function App() {
       {showRoom && <RoomModal onClose={() => setShowRoom(false)} />}
       {showSaveLoad && <BoardSaveLoad onClose={() => setShowSaveLoad(false)} />}
       {imageModal && <ImageModal url={imageModal.url} label={imageModal.label} onClose={() => setImageModal(null)} />}
+      <DiceNotification />
     </div>
   );
 }

@@ -57,15 +57,19 @@ export default function HandZone({ onViewImage, onPlayCard }) {
                         </div>
                     )}
                     {handObjects.map(obj => {
-                        // Render inline (not on canvas) – fake position with relative layout
+                        // Scale down massive high-res cards for the hand interface
+                        const HAND_SCALE = 0.3;
                         const inlineObj = { ...obj, x: 0, y: 0, zIndex: 1, ownerId: playerId };
+                        const scaledTransform = { scale: HAND_SCALE };
+
                         return (
-                            <div key={obj.id} className="relative flex-shrink-0 group" style={{ width: obj.width, height: obj.height }}>
-                                {obj.type === 'card' && <GameCard obj={inlineObj} transform={IDENTITY_TRANSFORM} onContextMenu={(e) => open(e, obj.id)} />}
-                                {obj.type === 'token' && <GameToken obj={inlineObj} transform={IDENTITY_TRANSFORM} onContextMenu={(e) => open(e, obj.id)} />}
-                                {obj.type === 'tile' && <GameTile obj={inlineObj} transform={IDENTITY_TRANSFORM} onContextMenu={(e) => open(e, obj.id)} />}
+                            <div key={obj.id} className="relative flex-shrink-0 group"
+                                style={{ width: obj.width * HAND_SCALE, height: obj.height * HAND_SCALE }}>
+                                {obj.type === 'card' && <GameCard obj={inlineObj} transform={scaledTransform} onContextMenu={(e) => open(e, obj.id)} />}
+                                {obj.type === 'token' && <GameToken obj={inlineObj} transform={scaledTransform} onContextMenu={(e) => open(e, obj.id)} />}
+                                {obj.type === 'tile' && <GameTile obj={inlineObj} transform={scaledTransform} onContextMenu={(e) => open(e, obj.id)} />}
                                 <button
-                                    className="absolute -top-2 -right-2 bg-stone-700 hover:bg-stone-500 text-white rounded-full w-5 h-5 text-xs hidden group-hover:flex items-center justify-center shadow transition-colors"
+                                    className="absolute -top-2 -right-2 bg-stone-700 hover:bg-stone-500 text-white rounded-full w-5 h-5 text-xs hidden group-hover:flex items-center justify-center shadow transition-colors z-30"
                                     onClick={() => returnToBoard(obj.id)}
                                     title="Return to board"
                                 >↑</button>

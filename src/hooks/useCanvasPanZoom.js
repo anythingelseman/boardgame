@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 
-const ZOOM_MIN = 0.25;
+const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 3;
 const ZOOM_STEP = 0.1;
 

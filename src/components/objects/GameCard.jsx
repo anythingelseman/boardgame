@@ -20,19 +20,27 @@ export default function GameCard({ obj, transform, onContextMenu }) {
             <div className="card-wrapper w-full h-full">
                 <div className={`card-inner ${obj.flipped ? 'flipped' : ''}`}>
                     {/* Card Front */}
-                    <div className="card-face flex flex-col items-center justify-between p-1.5 border-2 border-white/30 shadow-xl"
+                    <div className="card-face flex flex-col items-center justify-between p-1.5 border-2 border-white/30 shadow-xl relative overflow-hidden"
                         style={{ background: obj.color || '#fdf6e3' }}>
-                        <div className="w-full text-center text-[9px] font-bold text-stone-700 truncate">{obj.label}</div>
+
+                        {/* Content Layer */}
                         {obj.imageUrl ? (
-                            <div className="flex-1 w-full relative my-1 rounded overflow-hidden">
-                                <HqImage src={obj.imageUrl} alt={obj.label} scale={transform.scale} style={{ objectFit: 'contain' }} />
-                            </div>
+                            /* Pure Image Mode */
+                            <HqImage src={obj.imageUrl} alt={obj.label} scale={transform.scale} style={{ objectFit: 'cover' }} />
                         ) : (
-                            <div className="flex-1 w-full flex items-center justify-center">
-                                <span className="text-2xl">🃏</span>
+                            /* Standard Card Mode */
+                            <div className="relative z-10 w-full h-full flex flex-col items-center justify-between pointer-events-none p-1.5">
+                                <div className="w-full text-center text-[9px] font-bold text-stone-700 truncate">
+                                    {obj.label}
+                                </div>
+                                <div className="flex-1 flex items-center justify-center">
+                                    <span className="text-2xl">🃏</span>
+                                </div>
+                                <div className="w-full text-center text-[9px] font-bold text-stone-700 truncate rotate-180">
+                                    {obj.label}
+                                </div>
                             </div>
                         )}
-                        <div className="w-full text-center text-[9px] font-bold text-stone-700 truncate rotate-180">{obj.label}</div>
                     </div>
                     {/* Card Back */}
                     <div className="card-back border-2 border-white/20 shadow-xl"

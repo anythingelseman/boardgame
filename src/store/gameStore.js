@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
 import { generateId } from '../utils/idUtils';
 
 const DEFAULT_OBJECT = {
@@ -15,10 +16,10 @@ const DEFAULT_OBJECT = {
 };
 
 const TYPES = {
-    card: { width: 80, height: 120, label: 'Card', color: '#fdf6e3' },
-    token: { width: 56, height: 56, label: 'Token', color: '#ef4444' },
-    tile: { width: 96, height: 96, label: 'Tile', color: '#78716c' },
-    board: { width: 600, height: 400, label: 'Board', color: '#2c5f2e' },
+    card: { width: 300, height: 420, label: 'Card', color: '#fdf6e3' },
+    token: { width: 80, height: 80, label: 'Token', color: '#ef4444' },
+    tile: { width: 400, height: 400, label: 'Tile', color: '#78716c' },
+    board: { width: 6000, height: 4000, label: 'Board', color: '#2c5f2e' },
 };
 
 let maxZ = 10;
@@ -191,6 +192,24 @@ const useGameStore = create((set, get) => ({
     },
 
     clearBoard: () => set({ objects: [], selectedIds: [] }),
+
+    // ── Dice System ──────────────────────────────────────────
+    diceCount: 1,
+    diceResults: [],
+    lastRollInfo: null, // { name: 'Alex', results: [5, 2], timestamp: 123 }
+
+    setDiceCount: (count) => set({ diceCount: Math.min(4, Math.max(1, count)) }),
+
+    rollDice: (playerName) => {
+        const { diceCount } = get();
+        const results = Array.from({ length: diceCount }, () => Math.floor(Math.random() * 6) + 1);
+        const rollInfo = { name: playerName, results, timestamp: Date.now() };
+        set({ diceResults: results, lastRollInfo: rollInfo });
+        return results;
+    },
+
+    setDiceResults: (results) => set({ diceResults: results }),
+    setLastRollInfo: (info) => set({ lastRollInfo: info }),
 
     // ── App Modes ────────────────────────────────────────────
     mode: 'play',

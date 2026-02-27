@@ -184,6 +184,12 @@ export default function useMultiplayer() {
                 case 'CURSOR':
                     if (msg.senderId !== playerId) updateCursor(msg.senderId, msg.cursor);
                     break;
+                case 'DICE_ROLL':
+                    isReceiving.current = true;
+                    store.setLastRollInfo(msg.rollInfo);
+                    store.setDiceResults(msg.rollInfo.results);
+                    isReceiving.current = false;
+                    break;
             }
         };
 
@@ -193,9 +199,21 @@ export default function useMultiplayer() {
         channel.bind('client-OBJECTS_UPDATE_BATCH', (data) => handleMsg('OBJECTS_UPDATE_BATCH', data));
         channel.bind('client-STATE_SYNC', (data) => handleMsg('STATE_SYNC', data));
         channel.bind('client-CURSOR', (data) => handleMsg('CURSOR', data));
+        channel.bind('client-DICE_ROLL', (data) => handleMsg('DICE_ROLL', data));
+
+        // Listen for dice rolls to broadcast
+        const unsubDice = useGameStore.subscribe(
+            (state) => state.lastRollInfo,
+            (rollInfo) => {
+                if (!isReceiving.current && rollInfo) {
+                    broadcast('DICE_ROLL', { rollInfo });
+                }
+            }
+        );
 
         return () => {
             unsubscribe();
+            unsubDice();
             if (throttleTimer.current) clearTimeout(throttleTimer.current);
             pusher.unsubscribe(channelName);
             pusher.disconnect();
