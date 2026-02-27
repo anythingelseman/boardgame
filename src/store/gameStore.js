@@ -24,7 +24,7 @@ const TYPES = {
 
 let maxZ = 10;
 
-const useGameStore = create((set, get) => ({
+const useGameStore = create(subscribeWithSelector((set, get) => ({
     objects: [],
     selectedIds: [],
 
@@ -218,6 +218,6 @@ const useGameStore = create((set, get) => ({
     toggleGrid: () => set(state => ({ showGrid: !state.showGrid })),
     background: 'felt-green',
     setBackground: (bg) => set({ background: bg }),
-}));
+})));
 
 export default useGameStore;
