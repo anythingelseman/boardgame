@@ -1,6 +1,7 @@
 import DraggableObject from './DraggableObject';
 import HqImage from './HqImage';
 import useRoomStore from '../../store/roomStore';
+import useGameStore from '../../store/gameStore';
 
 const CARD_BACK_PATTERN = `repeating-linear-gradient(
   45deg,
@@ -10,6 +11,13 @@ const CARD_BACK_PATTERN = `repeating-linear-gradient(
 
 export default function GameCard({ obj, transform, onContextMenu }) {
     const { playerId } = useRoomStore();
+    const objects = useGameStore(state => state.objects);
+
+    // Logic for deck counting
+    const sameDeck = obj.deckId ? objects.filter(o => o.deckId === obj.deckId && !o.ownerId) : [];
+    const deckCount = sameDeck.length;
+    const isTopCard = deckCount > 0 && !sameDeck.some(o => o.zIndex > obj.zIndex);
+
     const isInMyHand = obj.ownerId === playerId;
     const isInOtherHand = obj.ownerId && obj.ownerId !== playerId;
 
@@ -53,7 +61,18 @@ export default function GameCard({ obj, transform, onContextMenu }) {
                     </div>
                 </div>
                 {isInMyHand && (
-                    <div className="absolute -top-2 -right-2 bg-yellow-400 text-xs text-black rounded-full w-4 h-4 flex items-center justify-center font-bold">H</div>
+                    <div className="absolute -top-2 -right-2 bg-yellow-400 text-xs text-black rounded-full w-4 h-4 flex items-center justify-center font-bold shadow-md z-30">H</div>
+                )}
+
+                {/* Deck Count Overlay - Centered and Large */}
+                {isTopCard && deckCount > 1 && obj.flipped && (
+                    <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+                        <div className="bg-stone-950/80 backdrop-blur-md rounded-full w-24 h-24 flex items-center justify-center border-4 border-white/20 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+                            <span className="text-5xl font-black text-amber-400 drop-shadow-lg">
+                                {deckCount}
+                            </span>
+                        </div>
+                    </div>
                 )}
             </div>
         </DraggableObject>

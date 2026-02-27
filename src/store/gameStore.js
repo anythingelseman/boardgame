@@ -27,6 +27,12 @@ let maxZ = 10;
 const useGameStore = create(subscribeWithSelector((set, get) => ({
     objects: [],
     selectedIds: [],
+    logs: [], // [{ id, text, time }]
+    lastShuffleInfo: null, // { name, count, timestamp }
+
+    addLog: (text) => set(state => ({
+        logs: [{ id: generateId(), text, time: Date.now() }, ...state.logs].slice(0, 50)
+    })),
 
     // ── Spawn / Add ──────────────────────────────────────────
     spawnObject: (type, overrides = {}) => {
@@ -112,7 +118,7 @@ const useGameStore = create(subscribeWithSelector((set, get) => ({
         );
     },
 
-    shuffleDeck: (leaderId) => {
+    shuffleDeck: (leaderId, playerName) => {
         const deck = get()._getDeck(leaderId);
         if (deck.length < 2) return;
         const zVals = deck.map(d => d.zIndex).sort((a, b) => a - b);
@@ -121,6 +127,10 @@ const useGameStore = create(subscribeWithSelector((set, get) => ({
             acc[card.id] = zVals[i];
             return acc;
         }, {});
+
+        get().addLog(`${playerName} shuffled the deck (${deck.length} cards)`);
+        set({ lastShuffleInfo: { name: playerName, count: deck.length, timestamp: Date.now() } });
+
         set(state => ({
             objects: state.objects.map(o =>
                 updates[o.id] !== undefined ? { ...o, zIndex: updates[o.id] } : o
@@ -128,10 +138,15 @@ const useGameStore = create(subscribeWithSelector((set, get) => ({
         }));
     },
 
-    drawTopCard: (leaderId, ownerId = null) => {
+    drawTopCard: (leaderId, ownerId = null, playerName) => {
         const deck = get()._getDeck(leaderId).sort((a, b) => b.zIndex - a.zIndex);
         const top = deck[0];
         if (!top) return;
+
+        if (ownerId && playerName) {
+            get().addLog(`${playerName} drew a card`);
+        }
+
         set(state => ({
             objects: state.objects.map(o =>
                 o.id === top.id
@@ -154,10 +169,13 @@ const useGameStore = create(subscribeWithSelector((set, get) => ({
         }));
     },
 
-    flipTopCard: (leaderId) => {
+    flipTopCard: (leaderId, playerName) => {
         const deck = get()._getDeck(leaderId).sort((a, b) => b.zIndex - a.zIndex);
         const top = deck[0];
         if (!top) return;
+
+        get().addLog(`${playerName} flipped the top card`);
+
         set(state => ({
             objects: state.objects.map(o =>
                 o.id === top.id
@@ -168,10 +186,13 @@ const useGameStore = create(subscribeWithSelector((set, get) => ({
     },
 
     // Stack selected cards into a face-down deck — assigns shared deckId
-    createDeck: (ids) => {
-        const { objects } = get();
+    createDeck: (ids, playerName) => {
+        const { objects, addLog } = get();
         const cards = ids.map(id => objects.find(o => o.id === id)).filter(Boolean);
         if (cards.length < 2) return;
+
+        addLog(`${playerName} created a deck with ${cards.length} cards`);
+
         const newDeckId = generateId();
         const cx = Math.round(cards.reduce((s, c) => s + c.x, 0) / cards.length);
         const cy = Math.round(cards.reduce((s, c) => s + c.y, 0) / cards.length);
@@ -201,15 +222,20 @@ const useGameStore = create(subscribeWithSelector((set, get) => ({
     setDiceCount: (count) => set({ diceCount: Math.min(4, Math.max(1, count)) }),
 
     rollDice: (playerName) => {
-        const { diceCount } = get();
+        const { diceCount, addLog } = get();
         const results = Array.from({ length: diceCount }, () => Math.floor(Math.random() * 6) + 1);
         const rollInfo = { name: playerName, results, timestamp: Date.now() };
+
+        const rollStr = results.join(', ');
+        addLog(`${playerName} rolled ${diceCount} dice: [${rollStr}]`);
+
         set({ diceResults: results, lastRollInfo: rollInfo });
         return results;
     },
 
     setDiceResults: (results) => set({ diceResults: results }),
     setLastRollInfo: (info) => set({ lastRollInfo: info }),
+    setLastShuffleInfo: (info) => set({ lastShuffleInfo: info }),
 
     // ── App Modes ────────────────────────────────────────────
     mode: 'play',

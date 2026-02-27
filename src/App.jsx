@@ -7,6 +7,7 @@ import useMultiplayer from './hooks/useMultiplayer';
 
 // Stores
 import useGameStore from './store/gameStore';
+import useRoomStore from './store/roomStore';
 
 // Canvas
 import GameCanvas from './components/canvas/GameCanvas';
@@ -18,6 +19,8 @@ import HandZone from './components/ui/HandZone';
 import RoomModal from './components/ui/RoomModal';
 import ImageModal from './components/ui/ImageModal';
 import DiceNotification from './components/ui/DiceNotification';
+import GameLog from './components/ui/GameLog';
+import ShuffleNotification from './components/ui/ShuffleNotification';
 
 // Editor
 import EditorPanel from './components/editor/EditorPanel';
@@ -39,7 +42,8 @@ export default function App() {
     isPanning, isSpaceHeld
   } = useCanvasPanZoom();
   const { broadcastCursor } = useMultiplayer();
-  const { mode, background, updateObject, bringToFront } = useGameStore();
+  const { mode, background, updateObject, bringToFront, addLog, deselectAll } = useGameStore();
+  const { playerName } = useRoomStore();
 
   const [showRoom, setShowRoom] = useState(false);
   const [showSaveLoad, setShowSaveLoad] = useState(false);
@@ -64,6 +68,7 @@ export default function App() {
       y: worldY - (placementCard.height || 120) / 2,
     });
     bringToFront(placementCard.id);
+    addLog(`${playerName} played a card to the board`);
     setPlacementCard(null);
   };
 
@@ -76,6 +81,7 @@ export default function App() {
     if (e.key === 'Escape') {
       if (imageModal) setImageModal(null);
       if (placementCard) handlePlacementCancel();
+      deselectAll();
     }
 
     // Spacebar to view selected card
@@ -140,7 +146,9 @@ export default function App() {
       {showRoom && <RoomModal onClose={() => setShowRoom(false)} />}
       {showSaveLoad && <BoardSaveLoad onClose={() => setShowSaveLoad(false)} />}
       {imageModal && <ImageModal url={imageModal.url} label={imageModal.label} onClose={() => setImageModal(null)} />}
+      <GameLog />
       <DiceNotification />
+      <ShuffleNotification />
     </div>
   );
 }

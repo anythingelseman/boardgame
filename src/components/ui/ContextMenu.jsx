@@ -5,11 +5,10 @@ const SEP = 'SEP';
 
 export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) {
     const {
-        objects, selectedIds,
-        updateObject, removeObject, bringToFront,
-        shuffleDeck, drawTopCard, drawBottomCard, createDeck,
+        objects, selectedIds, updateObject, removeObject, bringToFront,
+        shuffleDeck, drawTopCard, drawBottomCard, createDeck, flipTopCard, addLog
     } = useGameStore();
-    const { playerId } = useRoomStore();
+    const { playerId, playerName } = useRoomStore();
 
     if (!menu) return null;
     const obj = objects.find(o => o.id === menu.objectId);
@@ -26,12 +25,15 @@ export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) 
     const fromHand = () => updateObject(obj.id, { ownerId: null });
     // Play card: enter placement mode so user can pick a spot on the canvas
     const playCard = (flipped = false) => onPlayCard?.(obj, flipped);
-    const del = () => removeObject(obj.id);
+    const del = () => {
+        addLog(`${playerName} deleted ${obj.label || obj.type}`);
+        removeObject(obj.id);
+    };
     const front = () => bringToFront(obj.id);
-    const shuffle = () => shuffleDeck(obj.id);
-    const drawTop = () => drawTopCard(obj.id, playerId);
-    const drawBot = () => drawBottomCard(obj.id, playerId);
-    const flipTop = () => useGameStore.getState().flipTopCard(obj.id);
+    const shuffle = () => shuffleDeck(obj.id, playerName);
+    const drawTop = () => drawTopCard(obj.id, playerId, playerName);
+    const drawBot = () => drawBottomCard(obj.id, playerId, playerName);
+    const flipTop = () => flipTopCard(obj.id, playerName);
     const viewImage = () => onViewImage?.({ url: obj.imageUrl, label: obj.label });
 
     // Multi-select: create deck from selected cards
@@ -40,7 +42,7 @@ export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) 
         return o && o.type === 'card' && !o.ownerId;
     });
     const canMakeDeck = selCards.length > 1 && selCards.includes(obj.id);
-    const makeDeck = () => createDeck(selCards);
+    const makeDeck = () => createDeck(selCards, playerName);
 
     const menuItems = [
         // View image (any type with imageUrl)

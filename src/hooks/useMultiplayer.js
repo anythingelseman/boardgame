@@ -118,6 +118,16 @@ export default function useMultiplayer() {
                     store.setDiceResults(msg.rollInfo.results);
                     isReceiving.current = false;
                     break;
+                case 'GAME_LOG':
+                    isReceiving.current = true;
+                    store.addLog(msg.text);
+                    isReceiving.current = false;
+                    break;
+                case 'SHUFFLE_EVENT':
+                    isReceiving.current = true;
+                    store.setLastShuffleInfo(msg.info);
+                    isReceiving.current = false;
+                    break;
             }
         };
 
@@ -176,9 +186,31 @@ export default function useMultiplayer() {
             }
         );
 
+        const unsubLogs = useGameStore.subscribe(
+            (state) => state.logs,
+            (logs, prevLogs) => {
+                if (isReceiving.current) return;
+                const newLog = logs[0];
+                if (newLog && (!prevLogs[0] || newLog.id !== prevLogs[0].id)) {
+                    broadcast('GAME_LOG', { text: newLog.text });
+                }
+            }
+        );
+
+        const unsubShuffle = useGameStore.subscribe(
+            (state) => state.lastShuffleInfo,
+            (info) => {
+                if (!isReceiving.current && info) {
+                    broadcast('SHUFFLE_EVENT', { info });
+                }
+            }
+        );
+
         return () => {
             unsubscribe();
             unsubDice();
+            unsubLogs();
+            unsubShuffle();
             if (throttleTimer.current) clearTimeout(throttleTimer.current);
             clearInterval(heartbeatTimer.current);
             ws.close();
