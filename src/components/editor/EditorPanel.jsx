@@ -59,6 +59,22 @@ export default function EditorPanel() {
                         </div>
                     </div>
 
+                    {/* Text Color (Board only) */}
+                    {selected.type === 'board' && (
+                        <div className="mb-3">
+                            <label className="text-[10px] text-stone-600 block mb-1">Text Color</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="color"
+                                    className="w-8 h-8 rounded cursor-pointer bg-transparent border border-white/10"
+                                    value={selected.textColor || '#000000'}
+                                    onChange={e => updateObject(selected.id, { textColor: e.target.value })}
+                                />
+                                <span className="text-xs text-stone-500 font-mono">{selected.textColor || '#000000'}</span>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Size */}
                     <div className="mb-3 grid grid-cols-2 gap-2">
                         <div>
@@ -176,7 +192,7 @@ export default function EditorPanel() {
                             className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${background === bg.id ? 'bg-white/10 text-white' : 'text-stone-500 hover:text-stone-300 hover:bg-white/5'}`}
                             onClick={() => setBackground(bg.id)}
                         >
-                            <span className="w-4 h-4 rounded-sm border border-white/20 flex-shrink-0" style={{ background: bg.color }} />
+                            <span className="w-4 h-4 rounded-sm border border-white/20 shrink-0" style={{ background: bg.color }} />
                             {bg.label}
                         </button>
                     ))}

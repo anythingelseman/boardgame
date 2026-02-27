@@ -19,7 +19,7 @@ const TYPES = {
     card: { width: 300, height: 420, label: 'Card', color: '#fdf6e3' },
     token: { width: 80, height: 80, label: 'Token', color: '#ef4444' },
     tile: { width: 400, height: 400, label: 'Tile', color: '#78716c' },
-    board: { width: 6000, height: 4000, label: 'Board', color: '#2c5f2e' },
+    board: { width: 6000, height: 4000, label: 'Board', color: '#ffffff', textColor: '#000000' },
 };
 
 let maxZ = 10;
@@ -182,6 +182,24 @@ const useGameStore = create(subscribeWithSelector((set, get) => ({
                     ? { ...o, flipped: !o.flipped, x: o.x + 90, zIndex: ++maxZ, deckId: null }
                     : o
             ),
+        }));
+    },
+
+    flipDeck: (leaderId, playerName) => {
+        const deck = get()._getDeck(leaderId);
+        if (deck.length === 0) return;
+
+        // Use the flip state of the top card to decide the new state
+        const topCard = [...deck].sort((a, b) => b.zIndex - a.zIndex)[0];
+        const targetFlipped = !topCard.flipped;
+
+        get().addLog(`${playerName} flipped the entire deck (${deck.length} cards)`);
+
+        set(state => ({
+            objects: state.objects.map(o => {
+                const inDeck = deck.some(d => d.id === o.id);
+                return inDeck ? { ...o, flipped: targetFlipped, zIndex: ++maxZ } : o;
+            }),
         }));
     },
 
