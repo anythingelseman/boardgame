@@ -6,7 +6,7 @@ import useRoomStore from '../store/roomStore';
 // After hosting, you will replace this with your server URL
 const WS_URL = window.location.hostname === 'localhost'
     ? 'ws://localhost:4000'
-    : `wss://${window.location.hostname}`; // Fallback assuming same host
+    : `wss://boardgame-83uz.onrender.com`;
 
 export default function useMultiplayer() {
     const wsRef = useRef(null);
