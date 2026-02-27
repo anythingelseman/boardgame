@@ -10,20 +10,19 @@
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 
-const PORT = 4000;
+const PORT = process.env.PORT || 4000;
 
-// rooms: Map<roomCode, Set<WebSocket>>
+// rooms: Map<roomCode, Map<ws, playerInfo>>
 const rooms = new Map();
 
 const httpServer = createServer((req, res) => {
-    // Simple health-check endpoint
     if (req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             status: 'ok',
-            rooms: [...rooms.entries()].map(([code, clients]) => ({
+            rooms: [...rooms.entries()].map(([code, players]) => ({
                 code,
-                clients: clients.size,
+                clients: players.size,
             })),
         }));
     } else {
@@ -35,60 +34,72 @@ const httpServer = createServer((req, res) => {
 const wss = new WebSocketServer({ server: httpServer });
 
 wss.on('connection', (ws, req) => {
-    // Parse room code from query string: ws://localhost:4000?room=ABCD12
-    const url = new URL(req.url, 'http://localhost');
-    const room = url.searchParams.get('room')?.toUpperCase();
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const roomCode = url.searchParams.get('room')?.toUpperCase();
 
-    if (!room) {
+    if (!roomCode) {
         ws.close(1008, 'Missing room parameter');
         return;
     }
 
-    // Join room
-    if (!rooms.has(room)) rooms.set(room, new Set());
-    const roomClients = rooms.get(room);
-    roomClients.add(ws);
+    if (!rooms.has(roomCode)) rooms.set(roomCode, new Map());
+    const playersMap = rooms.get(roomCode);
 
-    console.log(`[+] Client joined room "${room}" (${roomClients.size} total)`);
-
-    ws.on('message', (data, isBinary) => {
-        // Relay raw message to every OTHER client in the same room
-        let count = 0;
-        const msgStr = data.toString();
+    ws.on('message', (data) => {
         try {
-            const parsed = JSON.parse(msgStr);
-            console.log(`[relay] Received "${parsed.type}" from client in "${room}"`);
-        } catch (e) {
-            console.log(`[relay] Received raw data from client in "${room}"`);
-        }
+            const msg = JSON.parse(data.toString());
 
-        for (const client of roomClients) {
-            if (client !== ws && client.readyState === 1 /* OPEN */) {
-                client.send(data, { binary: isBinary });
-                count++;
+            // Handle Join logic
+            if (msg.type === 'JOIN') {
+                const playerInfo = {
+                    id: msg.playerId,
+                    name: msg.playerName,
+                    color: msg.playerColor,
+                };
+                playersMap.set(ws, playerInfo);
+
+                console.log(`[+] ${playerInfo.name} joined "${roomCode}"`);
+
+                // 1. Tell the new person about existing players
+                const existingMembers = Array.from(playersMap.values()).filter(p => p.id !== playerInfo.id);
+                ws.send(JSON.stringify({ type: 'SYNC_MEMBERS', members: existingMembers }));
+
+                // 2. Tell everyone else about the new person
+                broadcastToRoom(roomCode, ws, { type: 'MEMBER_ADDED', member: playerInfo });
+                return;
             }
-        }
-        if (count > 0) {
-            console.log(`[relay] Relayed msg to ${count} peer(s) in "${room}"`);
+
+            // Standard Relay
+            broadcastToRoom(roomCode, ws, msg);
+
+        } catch (e) {
+            console.error('[Relay Error]', e);
         }
     });
 
     ws.on('close', () => {
-        roomClients.delete(ws);
-        console.log(`[-] Client left room "${room}" (${roomClients.size} remaining)`);
-        if (roomClients.size === 0) {
-            rooms.delete(room);
-            console.log(`[x] Room "${room}" closed`);
+        const playerInfo = playersMap.get(ws);
+        if (playerInfo) {
+            console.log(`[-] ${playerInfo.name} left "${roomCode}"`);
+            broadcastToRoom(roomCode, ws, { type: 'MEMBER_REMOVED', playerId: playerInfo.id });
         }
-    });
-
-    ws.on('error', (err) => {
-        console.error(`[!] WS error in room "${room}":`, err.message);
-        roomClients.delete(ws);
+        playersMap.delete(ws);
+        if (playersMap.size === 0) rooms.delete(roomCode);
     });
 });
 
+function broadcastToRoom(roomCode, senderWs, msg) {
+    const playersMap = rooms.get(roomCode);
+    if (!playersMap) return;
+
+    const raw = JSON.stringify(msg);
+    for (const client of playersMap.keys()) {
+        if (client !== senderWs && client.readyState === 1) {
+            client.send(raw);
+        }
+    }
+}
+
 httpServer.listen(PORT, () => {
-    console.log(`\n🎲 BoardSandbox relay server running on ws://localhost:${PORT}`);
-    console.log(`   Health check: http://localhost:${PORT}/health\n`);
+    console.log(`\n🚀 Board Game Server running on port ${PORT}`);
 });
