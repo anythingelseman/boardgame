@@ -45,9 +45,17 @@ export default function DraggableObject({ obj, transform, onContextMenu, childre
             bringManyToFront(idsToMove);
 
         } else {
-            // ── Single object ────────────────────────────────────
-            idsToMove = [obj.id];
-            bringToFront(obj.id);
+            // ── Single object or Loose Deck fallback ─────────────
+            // If it's a card and there are others right under it, move them together
+            const looseDeck = obj.type === 'card' && !obj.ownerId
+                ? currentObjects.filter(o =>
+                    o.type === 'card' && !o.ownerId &&
+                    Math.abs(o.x - obj.x) < 5 && Math.abs(o.y - obj.y) < 5
+                )
+                : [obj];
+
+            idsToMove = looseDeck.map(o => o.id);
+            bringManyToFront(idsToMove);
         }
 
         if (!selectedIds.includes(obj.id)) {

@@ -24,7 +24,7 @@ export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) 
     const flip = () => updateObject(obj.id, { flipped: !obj.flipped });
     const toHand = () => {
         addLog(`${playerName} took ${obj.label || obj.type} to hand`);
-        updateObject(obj.id, { ownerId: playerId, flipped: false });
+        updateObject(obj.id, { ownerId: playerId, flipped: false, deckId: null });
     };
     const fromHand = () => updateObject(obj.id, { ownerId: null });
     // Play card: enter placement mode so user can pick a spot on the canvas
