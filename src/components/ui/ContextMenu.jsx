@@ -7,7 +7,7 @@ const SEP = 'SEP';
 export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) {
     const {
         objects, selectedIds, updateObject, removeObject, bringToFront,
-        shuffleDeck, drawTopCard, drawBottomCard, createDeck, flipTopCard, flipDeck, addLog
+        shuffleDeck, drawTopCard, drawBottomCard, createDeck, flipTopCard, flipDeck, duplicateObject, addLog
     } = useGameStore();
     const { playerId, playerName } = useRoomStore();
 
@@ -39,6 +39,7 @@ export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) 
     const drawBot = () => drawBottomCard(obj.id, playerId, playerName);
     const flipTop = () => flipTopCard(obj.id, playerName);
     const flipEntireDeck = () => flipDeck(obj.id, playerName);
+    const dupe = () => duplicateObject(obj.id, playerName);
     const viewImage = () => onViewImage?.({ url: obj.imageUrl, label: obj.label });
 
     // Multi-select: create deck from selected cards
@@ -78,6 +79,7 @@ export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) 
         canMakeDeck && { label: `📦 Stack into Deck (${selCards.length})`, fn: makeDeck, highlight: true },
 
         { label: SEP },
+        !isInHand && { label: '👯 Duplicate', fn: dupe },
         { label: '🗑 Delete', fn: del, danger: true },
     ].filter(Boolean);
 

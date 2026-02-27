@@ -19,7 +19,7 @@ const TYPES = {
     card: { width: 300, height: 420, label: 'Card', color: '#fdf6e3' },
     token: { width: 80, height: 80, label: 'Token', color: '#ef4444' },
     tile: { width: 400, height: 400, label: 'Tile', color: '#78716c' },
-    board: { width: 6000, height: 4000, label: 'Board', color: '#ffffff', textColor: '#000000' },
+    board: { width: 600, height: 400, label: 'Board', color: '#ffffff', textColor: '#000000' },
 };
 
 let maxZ = 10;
@@ -67,6 +67,25 @@ const useGameStore = create(subscribeWithSelector((set, get) => ({
                 updates[o.id] ? { ...o, ...updates[o.id] } : o
             ),
         }));
+    },
+
+    duplicateObject: (id, playerName) => {
+        const { objects, addLog } = get();
+        const original = objects.find(o => o.id === id);
+        if (!original) return null;
+
+        const copy = {
+            ...original,
+            id: generateId(),
+            x: original.x + 20,
+            y: original.y + 20,
+            zIndex: ++maxZ,
+            ownerId: null, // Duplicates shouldn't go to hand automatically
+        };
+
+        addLog(`${playerName} duplicated ${original.label || original.type}`);
+        set(state => ({ objects: [...state.objects, copy] }));
+        return copy.id;
     },
 
     removeObject: (id) => {

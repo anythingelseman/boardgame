@@ -84,7 +84,7 @@ export default function App() {
       deselectAll();
     }
 
-    // Spacebar to view selected card
+    // Spacebar to view selected object image
     if (e.key === ' ' && !placementCard && selectedIds.length === 1) {
       const selected = objects.find(o => o.id === selectedIds[0]);
       if (selected?.imageUrl) {
