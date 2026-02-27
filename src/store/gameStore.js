@@ -29,6 +29,17 @@ const useGameStore = create(subscribeWithSelector((set, get) => ({
     selectedIds: [],
     logs: [], // [{ id, text, time }]
     lastShuffleInfo: null, // { name, count, timestamp }
+    viewingHandPlayerId: null,
+    peekingDeckId: null,
+    peekingCount: 5,
+
+    setViewingHand: (id) => set({ viewingHandPlayerId: id }),
+    setPeekingDeck: (id, playerName, count = 5) => {
+        if (id && playerName) {
+            get().addLog(`${playerName} is peeking at the top ${count} cards of a deck`);
+        }
+        set({ peekingDeckId: id, peekingCount: count });
+    },
 
     addLog: (text) => set(state => ({
         logs: [{ id: generateId(), text, time: Date.now() }, ...state.logs].slice(0, 50)
@@ -76,30 +87,99 @@ const useGameStore = create(subscribeWithSelector((set, get) => ({
         }));
     },
 
-    duplicateObject: (id, playerName) => {
+    duplicateObjects: (ids, playerName) => {
         const { objects, addLog } = get();
-        const original = objects.find(o => o.id === id);
-        if (!original) return null;
+        const targets = objects.filter(o => ids.includes(o.id));
+        if (targets.length === 0) return;
 
-        const copy = {
+        const copies = targets.map(original => ({
             ...original,
             id: generateId(),
             x: original.x + 20,
             y: original.y + 20,
             zIndex: ++maxZ,
-            ownerId: null, // Duplicates shouldn't go to hand automatically
-        };
+            ownerId: null,
+            deckId: null, // Don't preserve deckId for duplicated items
+        }));
 
-        addLog(`${playerName} duplicated ${original.label || original.type}`);
-        set(state => ({ objects: [...state.objects, copy] }));
-        return copy.id;
+        addLog(`${playerName} duplicated ${targets.length > 1 ? `${targets.length} objects` : (targets[0].label || targets[0].type)}`);
+        set(state => ({ objects: [...state.objects, ...copies] }));
     },
 
-    toHand: (obj, playerId, playerName) => {
-        const { addLog, updateObject } = get();
-        addLog(`${playerName} took ${obj.label || obj.type} to hand`);
-        updateObject(obj.id, { ownerId: playerId, flipped: false, deckId: null });
+    toHand: (objOrIds, playerId, playerName) => {
+        const { addLog, objects } = get();
+        // Robust ID extraction: handles [ids], "id", or {id: "id"}
+        const ids = Array.isArray(objOrIds)
+            ? objOrIds
+            : (typeof objOrIds === 'string' ? [objOrIds] : [objOrIds.id]);
+
+        const targets = objects.filter(o => ids.includes(o.id));
+
+        if (targets.length === 0) return;
+
+        addLog(`${playerName} took ${targets.length > 1 ? `${targets.length} objects` : (targets[0].label || targets[0].type)} to hand`);
+
+        set(state => ({
+            objects: state.objects.map(o =>
+                ids.includes(o.id)
+                    ? { ...o, ownerId: playerId, flipped: false, deckId: null, zIndex: ++maxZ }
+                    : o
+            ),
+        }));
     },
+
+    stealRandomCard: (targetPlayerId, thiefId, thiefName, targetName) => {
+        const { objects, addLog } = get();
+        const targetHand = objects.filter(o => o.ownerId === targetPlayerId);
+        if (targetHand.length === 0) return;
+
+        const randomIndex = Math.floor(Math.random() * targetHand.length);
+        const card = targetHand[randomIndex];
+
+        addLog(`${thiefName} stole a random card from ${targetName}`);
+
+        set(state => ({
+            objects: state.objects.map(o =>
+                o.id === card.id
+                    ? { ...o, ownerId: thiefId, flipped: false, zIndex: ++maxZ }
+                    : o
+            )
+        }));
+    },
+
+    takeCardFromHand: (cardId, thiefId, thiefName, targetName) => {
+        const { addLog } = get();
+        addLog(`${thiefName} took a specific card from ${targetName}'s hand`);
+
+        set(state => ({
+            objects: state.objects.map(o =>
+                o.id === cardId
+                    ? { ...o, ownerId: thiefId, flipped: false, zIndex: ++maxZ }
+                    : o
+            )
+        }));
+    },
+
+    reorderDeckCards: (deckId, orderedIds, playerName) => {
+        const { objects, addLog } = get();
+        const targets = objects.filter(o => orderedIds.includes(o.id));
+
+        // 1. Get pool of existing z-indices used by these cards
+        const zPool = targets.map(t => t.zIndex).sort((a, b) => a - b);
+
+        // 2. Map them to the new order (orderedIds are bottom -> top)
+        const updates = {};
+        orderedIds.forEach((id, i) => {
+            updates[id] = { zIndex: zPool[i] };
+        });
+
+        addLog(`${playerName} rearranged cards in the deck`);
+
+        set(state => ({
+            objects: state.objects.map(o => updates[o.id] ? { ...o, ...updates[o.id] } : o)
+        }));
+    },
+
 
     removeObject: (id) => {
         set(state => ({
@@ -234,17 +314,19 @@ const useGameStore = create(subscribeWithSelector((set, get) => ({
         }));
     },
 
-    flipTopCard: (leaderId, playerName) => {
-        const deck = get()._getDeck(leaderId).sort((a, b) => b.zIndex - a.zIndex);
-        const top = deck[0];
-        if (!top) return;
+    takeTopCard: (leaderId, playerName) => {
+        const deck = get()._getDeck(leaderId);
+        if (deck.length === 0) return;
 
-        get().addLog(`${playerName} flipped the top card`);
+        // Strictly pick the one with the highest zIndex
+        const top = [...deck].sort((a, b) => b.zIndex - a.zIndex)[0];
+
+        get().addLog(`${playerName} took the top card`);
 
         set(state => ({
             objects: state.objects.map(o =>
                 o.id === top.id
-                    ? { ...o, flipped: !o.flipped, x: o.x + 90, zIndex: ++maxZ, deckId: null }
+                    ? { ...o, flipped: false, x: o.x + 90, zIndex: ++maxZ, deckId: null }
                     : o
             ),
         }));

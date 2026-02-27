@@ -38,11 +38,12 @@ export default function GameCanvas({
     const handlePointerDown = useCallback((e) => {
         // In placement mode, left-click places, right-click cancels
         if (placementCard) {
+            e.stopPropagation();
             if (e.button === 0) {
-                e.stopPropagation();
                 const world = screenToWorld(e.clientX, e.clientY);
                 onPlacementConfirm?.(world.x, world.y);
             } else if (e.button === 2) {
+                e.preventDefault(); // Stop native context menu
                 onPlacementCancel?.();
             }
             return;

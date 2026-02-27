@@ -6,8 +6,9 @@ const SEP = 'SEP';
 
 export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) {
     const {
-        objects, selectedIds, updateObject, removeObject, bringToFront,
-        shuffleDeck, drawTopCard, drawBottomCard, createDeck, flipTopCard, flipDeck, duplicateObject, addLog
+        objects, selectedIds, updateObject, removeObject, bringManyToFront,
+        shuffleDeck, drawTopCard, drawBottomCard, createDeck, takeTopCard, flipDeck, duplicateObjects, addLog, toHand,
+        setPeekingDeck
     } = useGameStore();
     const { playerId, playerName } = useRoomStore();
 
@@ -20,26 +21,38 @@ export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) 
     const isInHand = obj.ownerId === playerId;
     const isDeck = !!obj.deckId;
 
-    const rotate = () => updateObject(obj.id, { rotation: (obj.rotation + 90) % 360 });
-    const flip = () => updateObject(obj.id, { flipped: !obj.flipped });
-    const toHand = () => {
-        addLog(`${playerName} took ${obj.label || obj.type} to hand`);
-        updateObject(obj.id, { ownerId: playerId, flipped: false, deckId: null });
+    // Use current selection if the right-clicked object is part of it, otherwise just the object itself
+    const targetIds = selectedIds.includes(obj.id) ? selectedIds : [obj.id];
+
+    const rotate = () => {
+        targetIds.forEach(id => {
+            const o = objects.find(x => x.id === id);
+            if (o) updateObject(id, { rotation: (o.rotation + 90) % 360 });
+        });
     };
-    const fromHand = () => updateObject(obj.id, { ownerId: null });
+    const flip = () => {
+        targetIds.forEach(id => {
+            const o = objects.find(x => x.id === id);
+            if (o && !o.deckId) updateObject(id, { flipped: !o.flipped });
+        });
+    };
+    const toHandMany = () => toHand(targetIds, playerId, playerName);
+    const fromHandMany = () => targetIds.forEach(id => updateObject(id, { ownerId: null }));
+
     // Play card: enter placement mode so user can pick a spot on the canvas
     const playCard = (flipped = false) => onPlayCard?.(obj, flipped);
+
     const del = () => {
-        addLog(`${playerName} deleted ${obj.label || obj.type}`);
-        removeObject(obj.id);
+        addLog(`${playerName} deleted ${targetIds.length > 1 ? `${targetIds.length} objects` : (obj.label || obj.type)}`);
+        targetIds.forEach(id => removeObject(id));
     };
-    const front = () => bringToFront(obj.id);
+    const front = () => bringManyToFront(targetIds);
     const shuffle = () => shuffleDeck(obj.id, playerName);
     const drawTop = () => drawTopCard(obj.id, playerId, playerName);
     const drawBot = () => drawBottomCard(obj.id, playerId, playerName);
-    const flipTop = () => flipTopCard(obj.id, playerName);
+    const takeTop = () => takeTopCard(obj.id, playerName);
     const flipEntireDeck = () => flipDeck(obj.id, playerName);
-    const dupe = () => duplicateObject(obj.id, playerName);
+    const dupe = () => duplicateObjects(targetIds, playerName);
     const viewImage = () => onViewImage?.({ url: obj.imageUrl, label: obj.label });
 
     // Multi-select: create deck from selected cards
@@ -50,10 +63,18 @@ export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) 
     const canMakeDeck = selCards.length > 1 && selCards.includes(obj.id);
     const makeDeck = () => createDeck(selCards, playerName);
 
+    const handlePeek = () => {
+        const num = window.prompt('How many cards do you want to peek?', '5');
+        const count = parseInt(num);
+        if (!isNaN(count) && count > 0) {
+            setPeekingDeck(obj.id, playerName, count);
+        }
+    };
+
     const menuItems = [
-        // View image (any type with imageUrl)
-        obj.imageUrl && { label: '🔍 View Full Image', fn: viewImage, highlight: true },
-        obj.imageUrl && { label: SEP },
+        // View image (any type with imageUrl, prevent for decks to avoid cheating)
+        obj.imageUrl && !isDeck && { label: '🔍 View Full Image', fn: viewImage, highlight: true },
+        obj.imageUrl && !isDeck && { label: SEP },
 
         { label: '↺  Rotate 90°', fn: rotate },
         !isInHand && { label: '⬆  Bring to Front', fn: front },
@@ -61,14 +82,15 @@ export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) 
         // Hand-specific
         isInHand && { label: '▶  Play Card (face-up)', fn: () => playCard(false), highlight: true },
         isInHand && { label: '🌘  Play Card (face-down)', fn: () => playCard(true), highlight: true },
-        isInHand && { label: '✋ Return to Board', fn: fromHand },
 
-        // Board card actions (Single card only)
+
+        // Board card actions
         obj.type === 'card' && !isInHand && !isDeck && { label: '🔄 Flip Card', fn: flip },
-        obj.type === 'card' && !isInHand && !isDeck && { label: '✋ Send to Hand', fn: toHand },
+        obj.type === 'card' && !isInHand && !isDeck && { label: `✋ Send to Hand ${targetIds.length > 1 ? `(${targetIds.length})` : ''}`, fn: toHandMany },
 
         // Deck actions (Only if part of a deck)
-        isDeck && !isInHand && { label: '🔄 Flip Top Card', fn: flipTop, highlight: true },
+        isDeck && !isInHand && { label: '🔍 Peek Top Cards', fn: handlePeek, highlight: true },
+        isDeck && !isInHand && { label: '🔄 Take Top Card', fn: takeTop, highlight: true },
         isDeck && !isInHand && { label: '🌪 Flip Entire Deck', fn: flipEntireDeck },
         isDeck && !isInHand && { label: '🃏 Draw Top Card', fn: drawTop },
         isDeck && !isInHand && { label: '⬇ Draw Bottom Card', fn: drawBot },
@@ -79,7 +101,7 @@ export default function ContextMenu({ menu, onClose, onViewImage, onPlayCard }) 
         canMakeDeck && { label: `📦 Stack into Deck (${selCards.length})`, fn: makeDeck, highlight: true },
 
         { label: SEP },
-        !isInHand && { label: '👯 Duplicate', fn: dupe },
+        !isInHand && { label: `👯 Duplicate ${targetIds.length > 1 ? `(${targetIds.length})` : ''}`, fn: dupe },
         { label: '🗑 Delete', fn: del, danger: true },
     ].filter(Boolean);
 

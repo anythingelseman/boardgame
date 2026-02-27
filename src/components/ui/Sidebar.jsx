@@ -16,8 +16,11 @@ const TOKEN_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#a855f7', '#e
 const SIDEBAR_W = 224; // px — matches w-56
 
 export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapsed, onToggle, onRotate, onReset }) {
-    const { spawnObject, objects, mode, setMode, toggleGrid, showGrid, selectedIds, deselectAll } = useGameStore();
-    const { roomCode, role } = useRoomStore();
+    const {
+        spawnObject, objects, mode, setMode, toggleGrid, showGrid,
+        selectedIds, deselectAll, setViewingHand, stealRandomCard
+    } = useGameStore();
+    const { roomCode, role, players, playerId, playerName } = useRoomStore();
     const [tokenColor, setTokenColor] = useState('#ef4444');
     const [customLabel, setCustomLabel] = useState('');
 
@@ -203,7 +206,7 @@ export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapse
                             <div className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Room: {roomCode}</div>
 
                             <div className="flex flex-col gap-1.5 mt-2">
-                                {useRoomStore.getState().players.map(p => {
+                                {players.map(p => {
                                     const pHandCount = objects.filter(o => o.ownerId === p.id).length;
                                     return (
                                         <div key={p.id} className="flex items-center justify-between bg-white/5 rounded px-2 py-1.5 border border-white/5">
@@ -213,12 +216,33 @@ export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapse
                                                     style={{ background: p.color || '#f59e0b', boxShadow: `0 0 4px ${p.color || '#f59e0b'}` }}
                                                 />
                                                 <span className="text-xs text-stone-200 truncate font-medium">
-                                                    {p.name} {p.id === useRoomStore.getState().playerId && '(You)'}
+                                                    {p.name} {p.id === playerId && '(You)'}
                                                 </span>
                                             </div>
-                                            <div className="flex items-center gap-1.5 px-1.5 py-0.5 bg-black/30 rounded text-stone-400">
-                                                <span className="text-[10px]">✋</span>
-                                                <span className="text-[10px] font-bold font-mono">{pHandCount}</span>
+
+                                            <div className="flex items-center gap-1">
+                                                {p.id !== playerId && pHandCount > 0 && (
+                                                    <div className="flex gap-0.5">
+                                                        <button
+                                                            onClick={() => setViewingHand(p.id)}
+                                                            className="w-6 h-6 flex items-center justify-center hover:bg-white/10 rounded transition-colors"
+                                                            title="View Hand"
+                                                        >
+                                                            <span className="text-[10px]">👁️</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => stealRandomCard(p.id, playerId, playerName, p.name)}
+                                                            className="w-6 h-6 flex items-center justify-center hover:bg-white/10 rounded transition-colors"
+                                                            title="Steal Random"
+                                                        >
+                                                            <span className="text-[10px]">🎰</span>
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center gap-1.5 px-1.5 py-0.5 bg-black/30 rounded text-stone-400">
+                                                    <span className="text-[10px]">✋</span>
+                                                    <span className="text-[10px] font-bold font-mono">{pHandCount}</span>
+                                                </div>
                                             </div>
                                         </div>
                                     );

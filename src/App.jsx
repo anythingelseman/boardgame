@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './index.css';
 
 // Hooks
@@ -21,6 +21,8 @@ import ImageModal from './components/ui/ImageModal';
 import DiceNotification from './components/ui/DiceNotification';
 import GameLog from './components/ui/GameLog';
 import ShuffleNotification from './components/ui/ShuffleNotification';
+import PlayerHandModal from './components/ui/PlayerHandModal';
+import DeckPeekModal from './components/ui/DeckPeekModal';
 
 // Editor
 import EditorPanel from './components/editor/EditorPanel';
@@ -76,14 +78,21 @@ export default function App() {
 
   // Keyboard shortcuts
   const { objects, selectedIds } = useGameStore();
-  const handleKeyDown = (e) => {
-    // Escape key
-    if (e.key === 'Escape') {
-      if (imageModal) setImageModal(null);
-      if (placementCard) handlePlacementCancel();
-      deselectAll();
-    }
+  // Global Escape handler to ensure placement/modals can always be closed
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        if (imageModal) setImageModal(null);
+        if (placementCard) handlePlacementCancel();
+        deselectAll();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [imageModal, placementCard, deselectAll]);
 
+  // Combined Pointer + Keyboard logic
+  const handleKeyDown = (e) => {
     // Spacebar to view selected object image
     if (e.key === ' ' && !placementCard && selectedIds.length === 1) {
       const selected = objects.find(o => o.id === selectedIds[0]);
@@ -149,6 +158,8 @@ export default function App() {
       <GameLog />
       <DiceNotification />
       <ShuffleNotification />
+      <PlayerHandModal />
+      <DeckPeekModal />
     </div>
   );
 }

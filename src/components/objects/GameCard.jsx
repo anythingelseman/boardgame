@@ -60,9 +60,7 @@ export default function GameCard({ obj, transform, onContextMenu }) {
                         </div>
                     </div>
                 </div>
-                {isInMyHand && (
-                    <div className="absolute -top-2 -right-2 bg-yellow-400 text-xs text-black rounded-full w-4 h-4 flex items-center justify-center font-bold shadow-md z-30">H</div>
-                )}
+
 
                 {/* Deck Count Overlay - Centered and Large */}
                 {isTopCard && deckCount > 1 && obj.flipped && (
