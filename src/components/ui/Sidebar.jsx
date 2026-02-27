@@ -15,7 +15,7 @@ const TOKEN_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#a855f7', '#e
 
 const SIDEBAR_W = 224; // px — matches w-56
 
-export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapsed, onToggle }) {
+export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapsed, onToggle, onRotate, onReset }) {
     const { spawnObject, objects, mode, setMode, toggleGrid, showGrid, selectedIds, deselectAll } = useGameStore();
     const { roomCode, role } = useRoomStore();
     const [tokenColor, setTokenColor] = useState('#ef4444');
@@ -149,7 +149,7 @@ export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapse
                                         onClick={() => useGameStore.getState().setDiceCount(num)}
                                         className={`flex-1 py-1 text-[10px] font-bold rounded transition-colors ${activeCount === num ? 'bg-amber-600 text-white' : 'text-stone-500 hover:text-stone-300'}`}
                                     >
-                                        {num}d
+                                        {num}
                                     </button>
                                 );
                             })}
@@ -169,6 +169,29 @@ export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapse
                                 </div>
                             ))}
                         </div>
+                    </div>
+                </div>
+
+                <div className="mx-3 border-t border-white/10 my-1" />
+
+                {/* ── Table Controls ── */}
+                <div className="px-3 py-2">
+                    <div className="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">Table</div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button
+                            onClick={onRotate}
+                            className="py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg font-bold text-[10px] uppercase tracking-wider border border-white/5 flex flex-col items-center gap-1 transition-colors"
+                        >
+                            <span className="text-sm">🔄</span>
+                            Rotate 90°
+                        </button>
+                        <button
+                            onClick={onReset}
+                            className="py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg font-bold text-[10px] uppercase tracking-wider border border-white/5 flex flex-col items-center gap-1 transition-colors"
+                        >
+                            <span className="text-sm">🏠</span>
+                            Reset View
+                        </button>
                     </div>
                 </div>
 

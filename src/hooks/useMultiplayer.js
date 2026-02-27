@@ -185,6 +185,7 @@ export default function useMultiplayer() {
                     if (msg.senderId !== playerId) updateCursor(msg.senderId, msg.cursor);
                     break;
                 case 'DICE_ROLL':
+                    if (!msg.rollInfo) break;
                     isReceiving.current = true;
                     store.setLastRollInfo(msg.rollInfo);
                     store.setDiceResults(msg.rollInfo.results);

@@ -66,8 +66,16 @@ export default function DraggableObject({ obj, transform, onContextMenu, childre
 
     const handlePointerMove = (e) => {
         if (!dragging || !dragRef.current) return;
-        const dx = (e.clientX - dragRef.current.startX) / transform.scale;
-        const dy = (e.clientY - dragRef.current.startY) / transform.scale;
+
+        const rad = (transform.rotation * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+
+        const sdx = (e.clientX - dragRef.current.startX) / transform.scale;
+        const sdy = (e.clientY - dragRef.current.startY) / transform.scale;
+
+        const dx = sdx * cos + sdy * sin;
+        const dy = -sdx * sin + sdy * cos;
 
         if (dragRef.current.idsToMove.length > 1) {
             const updates = {};

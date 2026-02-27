@@ -33,7 +33,11 @@ const BG_COLORS = {
 const SIDEBAR_W = 224;
 
 export default function App() {
-  const { transform, screenToWorld, handlers, zoomIn, zoomOut, resetView, isPanning, isSpaceHeld } = useCanvasPanZoom();
+  const {
+    transform, screenToWorld, handlers,
+    zoomIn, zoomOut, resetView, rotateCanvas,
+    isPanning, isSpaceHeld
+  } = useCanvasPanZoom();
   const { broadcastCursor } = useMultiplayer();
   const { mode, background, updateObject, bringToFront } = useGameStore();
 
@@ -109,6 +113,8 @@ export default function App() {
         onSaveLoad={() => setShowSaveLoad(true)}
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(c => !c)}
+        onRotate={rotateCanvas}
+        onReset={resetView}
       />
 
       <GameCanvas

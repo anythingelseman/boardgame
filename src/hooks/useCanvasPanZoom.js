@@ -5,19 +5,45 @@ const ZOOM_MAX = 3;
 const ZOOM_STEP = 0.1;
 
 export default function useCanvasPanZoom() {
-    const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+    const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1, rotation: 0 });
     const isPanning = useRef(false);
-    const panStart = useRef({ x: 0, y: 0 });
+    const panStart = useRef({ x: 0, y: 0 }); // Stores mouse position relative to canvas origin at pan start
     const spaceHeld = useRef(false);
 
     const screenToWorld = useCallback((sx, sy, t = null) => {
-        const { x, y, scale } = t || transform;
-        return { x: (sx - x) / scale, y: (sy - y) / scale };
+        const { x, y, scale, rotation = 0 } = t || transform;
+        const rad = (rotation * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+
+        // 1. Translate screen point to be relative to canvas origin
+        const tx = sx - x;
+        const ty = sy - y;
+
+        // 2. Rotate inversely
+        const rx = tx * cos + ty * sin;
+        const ry = -tx * sin + ty * cos;
+
+        // 3. Scale inversely
+        return { x: rx / scale, y: ry / scale };
     }, [transform]);
 
     const worldToScreen = useCallback((wx, wy) => {
-        const { x, y, scale } = transform;
-        return { x: wx * scale + x, y: wy * scale + y };
+        const { x, y, scale, rotation = 0 } = transform;
+        const rad = (rotation * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+
+        // 1. Scale
+        const swx = wx * scale;
+        const swy = wy * scale;
+
+        // 2. Rotate
+        const rx = swx * cos - swy * sin;
+        const ry = swx * sin + swy * cos;
+
+        // 3. Translate to screen position
+        return { x: rx + x, y: ry + y };
     }, [transform]);
 
     const onWheel = useCallback((e) => {
@@ -28,10 +54,10 @@ export default function useCanvasPanZoom() {
         setTransform(prev => {
             const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
             const newScale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, prev.scale + delta));
-            const ratio = newScale / prev.scale;
             return {
-                x: mouseX - ratio * (mouseX - prev.x),
-                y: mouseY - ratio * (mouseY - prev.y),
+                ...prev,
+                x: mouseX - (newScale / prev.scale) * (mouseX - prev.x),
+                y: mouseY - (newScale / prev.scale) * (mouseY - prev.y),
                 scale: newScale,
             };
         });
@@ -76,7 +102,8 @@ export default function useCanvasPanZoom() {
 
     const zoomIn = () => setTransform(prev => ({ ...prev, scale: Math.min(ZOOM_MAX, prev.scale + ZOOM_STEP * 2) }));
     const zoomOut = () => setTransform(prev => ({ ...prev, scale: Math.max(ZOOM_MIN, prev.scale - ZOOM_STEP * 2) }));
-    const resetView = () => setTransform({ x: 0, y: 0, scale: 1 });
+    const resetView = () => setTransform({ x: 0, y: 0, scale: 1, rotation: 0 });
+    const rotateCanvas = () => setTransform(prev => ({ ...prev, rotation: (prev.rotation + 90) % 360 }));
 
     return {
         transform,
@@ -88,5 +115,6 @@ export default function useCanvasPanZoom() {
         zoomIn,
         zoomOut,
         resetView,
+        rotateCanvas,
     };
 }

@@ -4,7 +4,7 @@ import useGameStore from '../../store/gameStore';
  * Renders another player's cursor as a colored dot + name label
  * positioned in world coordinates on the canvas.
  */
-export default function PlayerCursor({ player }) {
+export default function PlayerCursor({ player, rotation = 0 }) {
     const { name, color, cursor } = player;
 
     if (!cursor) return null;
@@ -16,7 +16,7 @@ export default function PlayerCursor({ player }) {
                 left: cursor.x,
                 top: cursor.y,
                 pointerEvents: 'none',
-                transform: 'translate(-4px, -4px)',
+                transform: `rotate(${-rotation}deg) translate(-4px, -4px)`,
                 zIndex: 9999,
             }}
         >

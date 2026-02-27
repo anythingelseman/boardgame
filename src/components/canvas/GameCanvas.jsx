@@ -160,7 +160,7 @@ export default function GameCanvas({
                 style={{
                     position: 'absolute',
                     inset: 0,
-                    transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+                    transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale}) rotate(${transform.rotation}deg)`,
                     transformOrigin: '0 0',
                     willChange: 'transform',
                 }}
@@ -181,7 +181,7 @@ export default function GameCanvas({
                 }
 
                 {otherPlayers.map(p =>
-                    p.cursor && <PlayerCursor key={p.id} player={p} />
+                    p.cursor && <PlayerCursor key={p.id} player={p} rotation={transform.rotation} />
                 )}
             </div>
 
