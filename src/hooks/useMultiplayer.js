@@ -2,17 +2,20 @@ import { useEffect, useRef } from 'react';
 import useGameStore from '../store/gameStore';
 import useRoomStore from '../store/roomStore';
 
-// For local dev, we use ws://localhost:4000
-// After hosting, you will replace this with your server URL
+// FORCE RENDER SERVER for testing, or use local if specified
+const RENDER_WS = 'wss://boardgame-83uz.onrender.com';
+const LOCAL_WS = 'ws://localhost:4000';
+
 const WS_URL = window.location.hostname === 'localhost'
-    ? 'ws://localhost:4000'
-    : `wss://boardgame-83uz.onrender.com`;
+    ? (import.meta.env.VITE_USE_LOCAL_WS ? LOCAL_WS : RENDER_WS)
+    : RENDER_WS;
 
 export default function useMultiplayer() {
     const wsRef = useRef(null);
     const isReceiving = useRef(false);
     const pendingPos = useRef({});
     const throttleTimer = useRef(null);
+    const heartbeatTimer = useRef(null);
 
     const { roomCode, playerId, playerName, upsertPlayer, removePlayer, updateCursor, players } = useRoomStore();
     const self = players.find(p => p.id === playerId);
@@ -20,13 +23,14 @@ export default function useMultiplayer() {
     useEffect(() => {
         if (!roomCode) return;
 
+        console.log(`[Multiplayer] Connecting to ${WS_URL} for room ${roomCode}...`);
         const ws = new WebSocket(`${WS_URL}?room=${roomCode}`);
         wsRef.current = ws;
 
         const broadcast = (type, data) => {
-            if (document.hidden) return;
+            if (document.hidden && type === 'CURSOR') return; // Don't sync cursor if tab hidden
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type, ...data }));
+                ws.send(JSON.stringify({ type, senderId: playerId, ...data }));
             }
         };
 
@@ -39,37 +43,47 @@ export default function useMultiplayer() {
         };
 
         ws.onopen = () => {
-            console.log('[Multiplayer] Connected to WebSocket');
-            // Join the room with player details
+            console.log('%c[Multiplayer] ✅ Connected to Relay Server', 'color: green; font-weight: bold');
+
+            // Start heartbeat to prevent Render from killing idle connection
+            heartbeatTimer.current = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'PING' }));
+            }, 25000);
+
             broadcast('JOIN', {
                 playerId,
                 playerName,
                 playerColor: self?.color || '#f59e0b'
             });
-            // Request board sync from others
             broadcast('STATE_SYNC_REQ', {});
         };
 
         ws.onmessage = (event) => {
             const msg = JSON.parse(event.data);
+            if (msg.type === 'PONG') return;
+
             const store = useGameStore.getState();
 
             switch (msg.type) {
                 case 'SYNC_MEMBERS':
+                    console.log(`[Multiplayer] Members in room:`, msg.members.length);
                     msg.members.forEach(m => upsertPlayer(m));
                     break;
                 case 'MEMBER_ADDED':
+                    console.log(`[Multiplayer] 👤 Player joined: ${msg.member.name}`);
                     upsertPlayer(msg.member);
                     break;
                 case 'MEMBER_REMOVED':
+                    console.log(`[Multiplayer] 🚪 Player left: ${msg.playerId}`);
                     removePlayer(msg.playerId);
                     break;
                 case 'STATE_SYNC_REQ':
-                    // Someone new joined, send them the board
+                    console.log(`[Multiplayer] 🔄 Sync requested by new player`);
                     broadcast('STATE_SYNC', { objects: store.objects, targetId: 'all' });
                     break;
                 case 'STATE_SYNC':
                     if (msg.targetId !== 'all' && msg.targetId !== playerId) break;
+                    console.log(`[Multiplayer] 📥 Received full board state (${msg.objects.length} objects)`);
                     isReceiving.current = true;
                     store.loadBoard(msg.objects);
                     isReceiving.current = false;
@@ -107,7 +121,16 @@ export default function useMultiplayer() {
             }
         };
 
-        // ── Store Subscription (Unlimited Broadcasts) ───────────────────
+        ws.onclose = (e) => {
+            console.log(`[Multiplayer] ❌ Disconnected from server (code: ${e.code})`);
+            clearInterval(heartbeatTimer.current);
+        };
+
+        ws.onerror = (err) => {
+            console.error('[Multiplayer] ⚠️ WebSocket Error:', err);
+        };
+
+        // ── Store Subscription ───────────────────────────────────────────
         let prevObjects = useGameStore.getState().objects;
         const unsubscribe = useGameStore.subscribe((state) => {
             if (isReceiving.current || state.objects === prevObjects) return;
@@ -115,7 +138,6 @@ export default function useMultiplayer() {
             const prevMap = new Map(prevObjects.map(o => [o.id, o]));
             const newMap = new Map(state.objects.map(o => [o.id, o]));
 
-            // Logic for detecting changes
             for (const [id, obj] of newMap) {
                 if (!prevMap.has(id)) {
                     broadcast('OBJECT_ADD', { object: obj });
@@ -132,7 +154,6 @@ export default function useMultiplayer() {
                     if (Object.keys(changes).every(k => ['x', 'y', 'zIndex'].includes(k))) {
                         pendingPos.current[id] = { ...pendingPos.current[id], ...changes };
                         if (!throttleTimer.current) {
-                            // SMOOTH MODE: 60ms throttle (approx 16fps)
                             throttleTimer.current = setTimeout(flushPositions, 60);
                         }
                     } else {
@@ -140,7 +161,6 @@ export default function useMultiplayer() {
                     }
                 }
             }
-            // detect removals
             for (const [id] of prevMap) {
                 if (!newMap.has(id)) broadcast('OBJECT_REMOVE', { objectId: id });
             }
@@ -160,6 +180,7 @@ export default function useMultiplayer() {
             unsubscribe();
             unsubDice();
             if (throttleTimer.current) clearTimeout(throttleTimer.current);
+            clearInterval(heartbeatTimer.current);
             ws.close();
         };
     }, [roomCode]); // eslint-disable-line

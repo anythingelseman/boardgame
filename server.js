@@ -49,6 +49,12 @@ wss.on('connection', (ws, req) => {
         try {
             const msg = JSON.parse(data.toString());
 
+            // Handle Heartbeat
+            if (msg.type === 'PING') {
+                ws.send(JSON.stringify({ type: 'PONG' }));
+                return;
+            }
+
             // Handle Join logic
             if (msg.type === 'JOIN') {
                 const playerInfo = {
