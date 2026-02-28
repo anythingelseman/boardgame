@@ -77,69 +77,68 @@ export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapse
                         </div>
                     )}
 
-                    {/* Custom label input */}
-                    <input
-                        className="w-full bg-stone-800 border border-white/10 rounded px-2 py-1 text-xs text-stone-300 placeholder-stone-600 mb-2 focus:outline-none focus:border-green-500/50"
-                        placeholder="Custom label (optional)"
-                        value={customLabel}
-                        onChange={e => setCustomLabel(e.target.value)}
-                    />
-
-                    {/* Token color picker */}
-                    <div className="mb-3">
-                        <div className="text-[10px] text-stone-600 mb-1">Token color</div>
-                        <div className="flex flex-wrap gap-1">
-                            {TOKEN_COLORS.map(c => (
-                                <button key={c} onClick={() => setTokenColor(c)}
-                                    className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
-                                    style={{ background: c, borderColor: tokenColor === c ? 'white' : 'transparent' }} />
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Spawn buttons */}
-                    <div className="flex flex-col gap-2">
-                        {SPAWN_TYPES.map(({ type, label, icon, desc }) => (
-                            <button
-                                key={type}
-                                className="sidebar-item flex items-center gap-3 px-3 py-2.5 rounded-lg border border-white/10 text-left group"
-                                style={{ background: 'rgba(255,255,255,0.05)' }}
-                                onClick={() => handleSpawn(type)}
-                            >
-                                <span className="text-xl">{icon}</span>
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-semibold text-stone-200">{label}</div>
-                                    <div className="text-[10px] text-stone-500">{desc}</div>
-                                </div>
-                                <span className="ml-auto bg-stone-700 text-stone-400 text-[10px] rounded px-1 font-mono">
-                                    {counts[type]}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Editor-only: Board / Mat spawn */}
                     {mode === 'editor' && (
-                        <div className="mt-3">
-                            <div className="text-[10px] text-stone-600 mb-1 uppercase tracking-widest">Editor Objects</div>
-                            {EDITOR_SPAWN_TYPES.map(({ type, label, icon, desc }) => (
-                                <button
-                                    key={type}
-                                    className="sidebar-item w-full flex items-center gap-3 px-3 py-2 rounded-lg border border-amber-500/20 text-left"
-                                    style={{ background: 'rgba(251,191,36,0.06)' }}
-                                    onClick={() => handleSpawn(type)}
-                                >
-                                    <span className="text-lg">{icon}</span>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-semibold text-amber-300">{label}</div>
-                                        <div className="text-[10px] text-stone-600">{desc}</div>
-                                    </div>
-                                    <span className="ml-auto bg-stone-700 text-stone-400 text-[10px] rounded px-1 font-mono">
-                                        {counts[type] ?? 0}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
+                        <>
+                            {/* Custom label input */}
+                            <input
+                                className="w-full bg-stone-800 border border-white/10 rounded px-2 py-1 text-xs text-stone-300 placeholder-stone-600 mb-2 focus:outline-none focus:border-green-500/50"
+                                placeholder="Custom label (optional)"
+                                value={customLabel}
+                                onChange={e => setCustomLabel(e.target.value)}
+                            />
+
+                            {/* Token color picker */}
+                            <div className="mb-3">
+                                <div className="text-[10px] text-stone-600 mb-1">Token color</div>
+                                <div className="flex flex-wrap gap-1">
+                                    {TOKEN_COLORS.map(c => (
+                                        <button key={c} onClick={() => setTokenColor(c)}
+                                            className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
+                                            style={{ background: c, borderColor: tokenColor === c ? 'white' : 'transparent' }} />
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Spawn buttons */}
+                            <div className="flex flex-col gap-2">
+                                {SPAWN_TYPES.map(({ type, label, icon, desc }) => (
+                                    <button
+                                        key={type}
+                                        className="sidebar-item flex items-center gap-3 px-3 py-2.5 rounded-lg border border-white/10 text-left group"
+                                        style={{ background: 'rgba(255,255,255,0.05)' }}
+                                        onClick={() => handleSpawn(type)}
+                                    >
+                                        <span className="text-xl">{icon}</span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-sm font-semibold text-stone-200">{label}</div>
+                                            <div className="text-[10px] text-stone-500">{desc}</div>
+                                        </div>
+                                        <span className="ml-auto bg-stone-700 text-stone-400 text-[10px] rounded px-1 font-mono">
+                                            {counts[type]}
+                                        </span>
+                                    </button>
+                                ))}
+
+                                {/* Editor-only: Board / Mat spawn */}
+                                {EDITOR_SPAWN_TYPES.map(({ type, label, icon, desc }) => (
+                                    <button
+                                        key={type}
+                                        className="sidebar-item w-full flex items-center gap-3 px-3 py-2 rounded-lg border border-amber-500/20 text-left"
+                                        style={{ background: 'rgba(251,191,36,0.06)' }}
+                                        onClick={() => handleSpawn(type)}
+                                    >
+                                        <span className="text-lg">{icon}</span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-sm font-semibold text-amber-300">{label}</div>
+                                            <div className="text-[10px] text-stone-600">{desc}</div>
+                                        </div>
+                                        <span className="ml-auto bg-stone-700 text-stone-400 text-[10px] rounded px-1 font-mono">
+                                            {counts[type] ?? 0}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        </>
                     )}
                 </div>
 
