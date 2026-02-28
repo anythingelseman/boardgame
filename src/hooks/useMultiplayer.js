@@ -23,13 +23,155 @@ export default function useMultiplayer() {
     useEffect(() => {
         if (!roomCode) return;
 
-        console.log(`[Multiplayer] Connecting to ${WS_URL} for room ${roomCode}...`);
-        const ws = new WebSocket(`${WS_URL}?room=${roomCode}`);
-        wsRef.current = ws;
+        let reconnectDelay = 1000;
+        let reconnectTimer = null;
+        let isManuallyClosed = false;
+
+        const connect = () => {
+            console.log(`[Multiplayer] Connecting to ${WS_URL} for room ${roomCode}...`);
+            const ws = new WebSocket(`${WS_URL}?room=${roomCode}`);
+            wsRef.current = ws;
+
+            ws.onopen = () => {
+                console.log('%c[Multiplayer] ✅ Connected to Relay Server', 'color: green; font-weight: bold');
+                reconnectDelay = 1000; // Reset delay on success
+
+                // Start heartbeat to prevent Render from killing idle connection
+                clearInterval(heartbeatTimer.current);
+                heartbeatTimer.current = setInterval(() => {
+                    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'PING' }));
+                }, 25000);
+
+                broadcast('JOIN', {
+                    playerId,
+                    playerName,
+                    playerColor: self?.color || '#f59e0b'
+                });
+                // Request fresh state on every reconnect to catch up on missed moves
+                broadcast('STATE_SYNC_REQ', {});
+            };
+
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'PONG') return;
+
+                const store = useGameStore.getState();
+
+                switch (msg.type) {
+                    case 'SYNC_MEMBERS':
+                        console.log(`[Multiplayer] Members in room:`, msg.members.length);
+                        msg.members.forEach(m => upsertPlayer(m));
+                        break;
+                    case 'MEMBER_ADDED':
+                        console.log(`[Multiplayer] 👤 Player joined: ${msg.member.name}`);
+                        upsertPlayer(msg.member);
+                        break;
+                    case 'MEMBER_REMOVED':
+                        console.log(`[Multiplayer] 🚪 Player left: ${msg.playerId}`);
+                        removePlayer(msg.playerId);
+                        break;
+                    case 'STATE_SYNC_REQ':
+                        console.log(`[Multiplayer] 🔄 Sync requested by new player`);
+                        broadcast('STATE_SYNC', { objects: store.objects, targetId: 'all' });
+                        break;
+                    case 'STATE_SYNC':
+                        if (msg.targetId !== 'all' && msg.targetId !== playerId) break;
+                        console.log(`[Multiplayer] 📥 Received full board state (${msg.objects.length} objects)`);
+                        isReceiving.current = true;
+                        store.loadBoard(msg.objects);
+                        isReceiving.current = false;
+                        break;
+                    case 'OBJECT_ADD':
+                        isReceiving.current = true;
+                        store.addObject(msg.object);
+                        isReceiving.current = false;
+                        break;
+                    case 'OBJECT_REMOVE':
+                        isReceiving.current = true;
+                        store.removeObject(msg.objectId);
+                        isReceiving.current = false;
+                        break;
+                    case 'OBJECT_UPDATE':
+                        isReceiving.current = true;
+                        store.updateObject(msg.objectId, msg.changes);
+                        isReceiving.current = false;
+                        break;
+                    case 'OBJECTS_UPDATE_BATCH':
+                        isReceiving.current = true;
+                        store.updateManyObjects(msg.updates);
+                        isReceiving.current = false;
+                        break;
+                    case 'CURSOR':
+                        if (msg.senderId !== playerId) updateCursor(msg.senderId, msg.cursor);
+                        break;
+                    case 'DICE_ROLL':
+                        if (!msg.rollInfo) break;
+                        isReceiving.current = true;
+                        store.setLastRollInfo(msg.rollInfo);
+                        store.setDiceResults(msg.rollInfo.results);
+                        isReceiving.current = false;
+                        break;
+                    case 'GAME_LOG':
+                        isReceiving.current = true;
+                        store.addLog(msg.text);
+                        isReceiving.current = false;
+                        break;
+                    case 'SHUFFLE_EVENT':
+                        isReceiving.current = true;
+                        store.setLastShuffleInfo(msg.info);
+                        isReceiving.current = false;
+                        break;
+                    case 'PERMISSION_REQ':
+                        if (msg.targetId === playerId) {
+                            store.setPendingPermission({
+                                requestId: msg.requestId,
+                                fromId: msg.senderId,
+                                fromName: msg.fromName,
+                                type: msg.actionType
+                            });
+                        }
+                        break;
+                    case 'PERMISSION_RES':
+                        if (msg.targetId === playerId) {
+                            const waiting = store.waitingForPermission;
+                            if (waiting && waiting.requestId === msg.requestId) {
+                                store.setWaitingForPermission(null);
+                                if (msg.approved) {
+                                    if (waiting.type === 'VIEW_HAND') {
+                                        store.setViewingHand(msg.senderId);
+                                    } else if (waiting.type === 'STEAL_RANDOM') {
+                                        store.stealRandomCard(msg.senderId, playerId, playerName, waiting.targetName);
+                                    }
+                                } else {
+                                    store.addLog(`${msg.fromName} denied your request.`);
+                                }
+                            }
+                        }
+                        break;
+                }
+            };
+
+            ws.onclose = (e) => {
+                if (isManuallyClosed) return;
+                console.log(`[Multiplayer] ❌ Disconnected (code: ${e.code}). Reconnecting in ${reconnectDelay / 1000}s...`);
+                clearInterval(heartbeatTimer.current);
+
+                reconnectTimer = setTimeout(() => {
+                    connect();
+                    reconnectDelay = Math.min(reconnectDelay * 2, 10000); // Exponential backoff up to 10s
+                }, reconnectDelay);
+            };
+
+            ws.onerror = (err) => {
+                console.error('[Multiplayer] ⚠️ WebSocket Error:', err);
+                ws.close();
+            };
+        };
 
         const broadcast = (type, data) => {
-            if (document.hidden && type === 'CURSOR') return; // Don't sync cursor if tab hidden
-            if (ws.readyState === WebSocket.OPEN) {
+            if (document.hidden && type === 'CURSOR') return;
+            const ws = wsRef.current;
+            if (ws?.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type, senderId: playerId, ...data }));
             }
         };
@@ -42,103 +184,7 @@ export default function useMultiplayer() {
             broadcast('OBJECTS_UPDATE_BATCH', { updates });
         };
 
-        ws.onopen = () => {
-            console.log('%c[Multiplayer] ✅ Connected to Relay Server', 'color: green; font-weight: bold');
-
-            // Start heartbeat to prevent Render from killing idle connection
-            heartbeatTimer.current = setInterval(() => {
-                if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'PING' }));
-            }, 25000);
-
-            broadcast('JOIN', {
-                playerId,
-                playerName,
-                playerColor: self?.color || '#f59e0b'
-            });
-            broadcast('STATE_SYNC_REQ', {});
-        };
-
-        ws.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
-            if (msg.type === 'PONG') return;
-
-            const store = useGameStore.getState();
-
-            switch (msg.type) {
-                case 'SYNC_MEMBERS':
-                    console.log(`[Multiplayer] Members in room:`, msg.members.length);
-                    msg.members.forEach(m => upsertPlayer(m));
-                    break;
-                case 'MEMBER_ADDED':
-                    console.log(`[Multiplayer] 👤 Player joined: ${msg.member.name}`);
-                    upsertPlayer(msg.member);
-                    break;
-                case 'MEMBER_REMOVED':
-                    console.log(`[Multiplayer] 🚪 Player left: ${msg.playerId}`);
-                    removePlayer(msg.playerId);
-                    break;
-                case 'STATE_SYNC_REQ':
-                    console.log(`[Multiplayer] 🔄 Sync requested by new player`);
-                    broadcast('STATE_SYNC', { objects: store.objects, targetId: 'all' });
-                    break;
-                case 'STATE_SYNC':
-                    if (msg.targetId !== 'all' && msg.targetId !== playerId) break;
-                    console.log(`[Multiplayer] 📥 Received full board state (${msg.objects.length} objects)`);
-                    isReceiving.current = true;
-                    store.loadBoard(msg.objects);
-                    isReceiving.current = false;
-                    break;
-                case 'OBJECT_ADD':
-                    isReceiving.current = true;
-                    store.addObject(msg.object);
-                    isReceiving.current = false;
-                    break;
-                case 'OBJECT_REMOVE':
-                    isReceiving.current = true;
-                    store.removeObject(msg.objectId);
-                    isReceiving.current = false;
-                    break;
-                case 'OBJECT_UPDATE':
-                    isReceiving.current = true;
-                    store.updateObject(msg.objectId, msg.changes);
-                    isReceiving.current = false;
-                    break;
-                case 'OBJECTS_UPDATE_BATCH':
-                    isReceiving.current = true;
-                    store.updateManyObjects(msg.updates);
-                    isReceiving.current = false;
-                    break;
-                case 'CURSOR':
-                    if (msg.senderId !== playerId) updateCursor(msg.senderId, msg.cursor);
-                    break;
-                case 'DICE_ROLL':
-                    if (!msg.rollInfo) break;
-                    isReceiving.current = true;
-                    store.setLastRollInfo(msg.rollInfo);
-                    store.setDiceResults(msg.rollInfo.results);
-                    isReceiving.current = false;
-                    break;
-                case 'GAME_LOG':
-                    isReceiving.current = true;
-                    store.addLog(msg.text);
-                    isReceiving.current = false;
-                    break;
-                case 'SHUFFLE_EVENT':
-                    isReceiving.current = true;
-                    store.setLastShuffleInfo(msg.info);
-                    isReceiving.current = false;
-                    break;
-            }
-        };
-
-        ws.onclose = (e) => {
-            console.log(`[Multiplayer] ❌ Disconnected from server (code: ${e.code})`);
-            clearInterval(heartbeatTimer.current);
-        };
-
-        ws.onerror = (err) => {
-            console.error('[Multiplayer] ⚠️ WebSocket Error:', err);
-        };
+        connect();
 
         // ── Store Subscription ───────────────────────────────────────────
         let prevObjects = useGameStore.getState().objects;
@@ -207,13 +253,15 @@ export default function useMultiplayer() {
         );
 
         return () => {
+            isManuallyClosed = true;
             unsubscribe();
             unsubDice();
             unsubLogs();
             unsubShuffle();
             if (throttleTimer.current) clearTimeout(throttleTimer.current);
+            if (reconnectTimer) clearTimeout(reconnectTimer);
             clearInterval(heartbeatTimer.current);
-            ws.close();
+            wsRef.current?.close();
         };
     }, [roomCode]); // eslint-disable-line
 
@@ -223,5 +271,33 @@ export default function useMultiplayer() {
         }
     };
 
-    return { broadcastCursor };
+    const sendPermissionReq = (targetId, actionType, targetName) => {
+        const requestId = Math.random().toString(36).substring(7);
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+                type: 'PERMISSION_REQ',
+                senderId: playerId,
+                targetId,
+                fromName: playerName,
+                actionType,
+                requestId
+            }));
+        }
+        return requestId;
+    };
+
+    const sendPermissionRes = (targetId, requestId, approved) => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+                type: 'PERMISSION_RES',
+                senderId: playerId,
+                targetId,
+                fromName: playerName,
+                requestId,
+                approved
+            }));
+        }
+    };
+
+    return { broadcastCursor, sendPermissionReq, sendPermissionRes };
 }

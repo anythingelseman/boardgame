@@ -32,8 +32,12 @@ const useGameStore = create(subscribeWithSelector((set, get) => ({
     viewingHandPlayerId: null,
     peekingDeckId: null,
     peekingCount: 5,
+    pendingPermissionReq: null, // { requestId, fromId, fromName, type: 'VIEW_HAND' | 'STEAL_RANDOM' }
+    waitingForPermission: null,  // { toName, type }
 
     setViewingHand: (id) => set({ viewingHandPlayerId: id }),
+    setPendingPermission: (req) => set({ pendingPermissionReq: req }),
+    setWaitingForPermission: (waiting) => set({ waitingForPermission: waiting }),
     setPeekingDeck: (id, playerName, count = 5) => {
         if (id && playerName) {
             get().addLog(`${playerName} is peeking at the top ${count} cards of a deck`);

@@ -23,6 +23,7 @@ import GameLog from './components/ui/GameLog';
 import ShuffleNotification from './components/ui/ShuffleNotification';
 import PlayerHandModal from './components/ui/PlayerHandModal';
 import DeckPeekModal from './components/ui/DeckPeekModal';
+import PermissionModal from './components/ui/PermissionModal';
 
 // Editor
 import EditorPanel from './components/editor/EditorPanel';
@@ -43,7 +44,7 @@ export default function App() {
     zoomIn, zoomOut, resetView, rotateCanvas,
     isPanning, isSpaceHeld
   } = useCanvasPanZoom();
-  const { broadcastCursor } = useMultiplayer();
+  const { broadcastCursor, sendPermissionRes, sendPermissionReq } = useMultiplayer();
   const { mode, background, updateObject, bringToFront, addLog, deselectAll } = useGameStore();
   const { playerName } = useRoomStore();
 
@@ -130,6 +131,7 @@ export default function App() {
         onToggle={() => setSidebarCollapsed(c => !c)}
         onRotate={rotateCanvas}
         onReset={resetView}
+        sendPermissionReq={sendPermissionReq}
       />
 
       <GameCanvas
@@ -160,6 +162,7 @@ export default function App() {
       <ShuffleNotification />
       <PlayerHandModal />
       <DeckPeekModal />
+      <PermissionModal onResponse={sendPermissionRes} />
     </div>
   );
 }

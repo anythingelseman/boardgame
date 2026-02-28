@@ -15,10 +15,11 @@ const TOKEN_COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#a855f7', '#e
 
 const SIDEBAR_W = 224; // px — matches w-56
 
-export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapsed, onToggle, onRotate, onReset }) {
+export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapsed, onToggle, onRotate, onReset, sendPermissionReq }) {
     const {
         spawnObject, objects, mode, setMode, toggleGrid, showGrid,
-        selectedIds, deselectAll, setViewingHand, stealRandomCard
+        selectedIds, deselectAll, setViewingHand, stealRandomCard,
+        setWaitingForPermission
     } = useGameStore();
     const { roomCode, role, players, playerId, playerName } = useRoomStore();
     const [tokenColor, setTokenColor] = useState('#ef4444');
@@ -43,6 +44,11 @@ export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapse
         token: objects.filter(o => o.type === 'token').length,
         tile: objects.filter(o => o.type === 'tile').length,
         board: objects.filter(o => o.type === 'board').length,
+    };
+
+    const handleRequestPermission = (targetId, type, targetName) => {
+        const requestId = sendPermissionReq(targetId, type, targetName);
+        setWaitingForPermission({ toName: targetName, type, requestId });
     };
 
     return (
@@ -224,14 +230,14 @@ export default function Sidebar({ screenToWorld, transform, onSaveLoad, collapse
                                                 {p.id !== playerId && pHandCount > 0 && (
                                                     <div className="flex gap-0.5">
                                                         <button
-                                                            onClick={() => setViewingHand(p.id)}
+                                                            onClick={() => handleRequestPermission(p.id, 'VIEW_HAND', p.name)}
                                                             className="w-6 h-6 flex items-center justify-center hover:bg-white/10 rounded transition-colors"
                                                             title="View Hand"
                                                         >
                                                             <span className="text-[10px]">👁️</span>
                                                         </button>
                                                         <button
-                                                            onClick={() => stealRandomCard(p.id, playerId, playerName, p.name)}
+                                                            onClick={() => handleRequestPermission(p.id, 'STEAL_RANDOM', p.name)}
                                                             className="w-6 h-6 flex items-center justify-center hover:bg-white/10 rounded transition-colors"
                                                             title="Steal Random"
                                                         >
