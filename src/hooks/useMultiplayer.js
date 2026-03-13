@@ -3,7 +3,7 @@ import useGameStore from '../store/gameStore';
 import useRoomStore from '../store/roomStore';
 
 // FORCE RENDER SERVER for testing, or use local if specified
-const RENDER_WS = 'wss://boardgame-196x.onrender.com';
+const RENDER_WS = import.meta.env.VITE_RENDER_WS_URL || 'wss://boardgame-196x.onrender.com';
 const LOCAL_WS = 'ws://localhost:4000';
 
 const WS_URL = window.location.hostname === 'localhost'
